@@ -1,0 +1,9 @@
+global:
+  regions:
+    - eu-central-1
+  cloudtrail:
+    s3_bucket_name: example-bucket
+    s3_key_prefix: example
+accounts:
+  example:
+    a: b

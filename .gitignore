@@ -2,3 +2,6 @@
 coverage.xml
 junit.xml
 .coverage
+.idea
+*.swp
+__pycache__
