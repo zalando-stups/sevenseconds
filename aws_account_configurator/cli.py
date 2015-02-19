@@ -49,6 +49,13 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
 
 
 def calculate_subnet(vpc_net: IPNetwork, _type: str, az_index: int):
+    '''
+    >>> calculate_subnet(IPNetwork('10.0.0.0/16'), 'dmz', 0)
+    IPNetwork('10.0.0.0/21')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/16'), 'internal', 0)
+    IPNetwork('10.0.128.0/20')
+    '''
     if _type == 'dmz':
         networks = list(vpc_net.subnet(21))
     else:
