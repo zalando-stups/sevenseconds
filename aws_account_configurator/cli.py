@@ -74,19 +74,21 @@ def find_trail(trails: list, name):
 def configure_routing(ec2_conn, subnets: list, cfg: dict):
     for subnet in subnets:
         if subnet.tags.get('Name').startswith('dmz-'):
+            az_name = subnet.availability_zone
 
-            sg_name = 'NAT-{}'.format(subnet.tags['Name'])
+            sg_name = 'NAT {}'.format(az_name)
             sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
             if not sg:
-                sg = ec2_conn.create_security_group(sg_name, 'NAT security group',
+                sg = ec2_conn.create_security_group(sg_name, 'Allow internet access through NAT instances',
                                                     vpc_id=subnet.vpc_id)
                 sg.add_tags({'Name': sg_name})
 
-                for proto in 'tcp', 'udp':
-                    sg.authorize(ip_protocol=proto,
-                                 from_port=0,
-                                 to_port=65535,
-                                 cidr_ip=str(VPC_NET))
+                internal_subnet = [sn for sn in subnets
+                                   if sn.availability_zone == az_name and sn.tags['Name'].startswith('internal-')][0]
+                sg.authorize(ip_protocol=-1,
+                             from_port=-1,
+                             to_port=-1,
+                             cidr_ip=internal_subnet.cidr_block)
             else:
                 sg = sg[0]
 
@@ -94,10 +96,11 @@ def configure_routing(ec2_conn, subnets: list, cfg: dict):
                                                       'owner_alias': 'amazon',
                                                       'root_device_type': 'ebs'})
             most_recent_image = sorted(images, key=lambda i: i.name)[-1]
-            with Action('Launching NAT instance..') as act:
+            with Action('Launching NAT instance in {az_name}..', **vars()) as act:
                 res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
                                              instance_type=cfg.get('instance_type', 'm3.medium'),
-                                             security_group_ids=[sg.id])
+                                             security_group_ids=[sg.id],
+                                             monitoring_enabled=True)
                 instance = res.instances[0]
 
                 status = instance.update()
@@ -107,7 +110,12 @@ def configure_routing(ec2_conn, subnets: list, cfg: dict):
                     act.progress()
 
                 if status == 'running':
-                    instance.add_tag('Name', 'NAT')
+                    instance.add_tag('Name', sg_name)
+
+            with Action('Associating Elastic IP..'):
+                addr = ec2_conn.allocate_address('vpc')
+                addr.associate(instance.id)
+            info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip)
 
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
