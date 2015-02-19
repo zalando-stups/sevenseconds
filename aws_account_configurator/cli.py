@@ -96,26 +96,30 @@ def configure_routing(ec2_conn, subnets: list, cfg: dict):
                                                       'owner_alias': 'amazon',
                                                       'root_device_type': 'ebs'})
             most_recent_image = sorted(images, key=lambda i: i.name)[-1]
-            with Action('Launching NAT instance in {az_name}..', **vars()) as act:
-                res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
-                                             instance_type=cfg.get('instance_type', 'm3.medium'),
-                                             security_group_ids=[sg.id],
-                                             monitoring_enabled=True)
-                instance = res.instances[0]
+            instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
+            if instances:
+                info('NAT instance {} is running with public IP {}'.format(sg_name, instances[0].ip_address))
+            else:
+                with Action('Launching NAT instance in {az_name}..', **vars()) as act:
+                    res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
+                                                 instance_type=cfg.get('instance_type', 'm3.medium'),
+                                                 security_group_ids=[sg.id],
+                                                 monitoring_enabled=True)
+                    instance = res.instances[0]
 
-                status = instance.update()
-                while status == 'pending':
-                    time.sleep(5)
                     status = instance.update()
-                    act.progress()
+                    while status == 'pending':
+                        time.sleep(5)
+                        status = instance.update()
+                        act.progress()
 
-                if status == 'running':
-                    instance.add_tag('Name', sg_name)
+                    if status == 'running':
+                        instance.add_tag('Name', sg_name)
 
-            with Action('Associating Elastic IP..'):
-                addr = ec2_conn.allocate_address('vpc')
-                addr.associate(instance.id)
-            info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip)
+                with Action('Associating Elastic IP..'):
+                    addr = ec2_conn.allocate_address('vpc')
+                    addr.associate(instance.id)
+                info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip))
 
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
