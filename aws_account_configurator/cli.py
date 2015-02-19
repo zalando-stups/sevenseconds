@@ -1,5 +1,6 @@
 import click
 from netaddr import IPNetwork
+import time
 import yaml
 
 import aws_account_configurator
@@ -44,7 +45,7 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
     if not subnet:
         with Action('Creating subnet {name} with {net}..', **vars()):
             if not dry_run:
-                subnet = vpc_conn.create_subnet(vpc.id, str(net))
+                subnet = vpc_conn.create_subnet(vpc.id, str(net), availability_zone=az.name)
                 subnet.add_tags({'Name': name})
 
 
@@ -68,6 +69,45 @@ def find_trail(trails: list, name):
     for trail in trails:
         if trail.get('Name') == name:
             return trail
+
+
+def configure_routing(ec2_conn, subnets: list, cfg: dict):
+    for subnet in subnets:
+        if subnet.tags.get('Name').startswith('dmz-'):
+
+            sg_name = 'NAT-{}'.format(subnet.tags['Name'])
+            sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
+            if not sg:
+                sg = ec2_conn.create_security_group(sg_name, 'NAT security group',
+                                                    vpc_id=subnet.vpc_id)
+                sg.add_tags({'Name': sg_name})
+
+                for proto in 'tcp', 'udp':
+                    sg.authorize(ip_protocol=proto,
+                                 from_port=0,
+                                 to_port=65535,
+                                 cidr_ip=str(VPC_NET))
+            else:
+                sg = sg[0]
+
+            images = ec2_conn.get_all_images(filters={'name': 'amzn-ami-vpc-nat-hvm*',
+                                                      'owner_alias': 'amazon',
+                                                      'root_device_type': 'ebs'})
+            most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+            with Action('Launching NAT instance..') as act:
+                res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
+                                             instance_type=cfg.get('instance_type', 'm3.medium'),
+                                             security_group_ids=[sg.id])
+                instance = res.instances[0]
+
+                status = instance.update()
+                while status == 'pending':
+                    time.sleep(5)
+                    status = instance.update()
+                    act.progress()
+
+                if status == 'running':
+                    instance.add_tag('Name', 'NAT')
 
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
@@ -135,6 +175,8 @@ def configure(file, account_name, dry_run):
                 configure_subnet(vpc_conn, vpc, az, _type, net, subnets, dry_run)
 
         # All subnets now exist
+        subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
+        configure_routing(ec2_conn, subnets, cfg.get('nat', {}))
         configure_cloudtrail(account_name, region, cfg, dry_run)
 
 
