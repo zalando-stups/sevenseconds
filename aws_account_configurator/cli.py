@@ -1,5 +1,6 @@
 import click
 import json
+import requests
 import time
 import yaml
 from netaddr import IPNetwork
@@ -244,7 +245,19 @@ def configure_iam(cfg):
 
     res = conn.list_saml_providers()['list_saml_providers_response']['list_saml_providers_result']
     saml_providers = res['saml_provider_list']
-    print(saml_providers)
+    for name, url in cfg.get('saml_providers', {}).items():
+        arn = 'arn:aws:iam::{account_id}:saml-provider/{name}'.format(account_id=account_id, name=name)
+        found = False
+        for provider in saml_providers:
+            if provider['arn'] == arn:
+                found = True
+        if found:
+            info('Found existing SAML provider {name}'.format(name=name))
+        else:
+            with Action('Creating SAML provider {name}..', **vars()):
+                r = requests.get(url)
+                saml_metadata_document = r.text
+                conn.create_saml_provider(saml_metadata_document, name)
 
 
 @cli.command()
