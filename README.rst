@@ -2,6 +2,10 @@
 AWS Account Configurator
 ========================
 
+.. image:: https://travis-ci.org/zalando/aws-account-configurator.svg?branch=master
+   :target: https://travis-ci.org/zalando/aws-account-configurator
+   :alt: Travis CI build status
+
 Command line utility to configure AWS accounts:
 
 * Enable CloudTrail
