@@ -147,12 +147,13 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
 @click.option('--dry-run', is_flag=True)
 def configure(file, account_name, dry_run):
     config = yaml.safe_load(file)
-    cfg = config['accounts'].get(account_name)
+    accounts = config.get('accounts', {})
+    if account_name not in accounts:
+        error('No configuration found for account {}'.format(account_name))
+        return
+    cfg = accounts.get(account_name)
     cfg.update(config.get('global', {}))
     regions = cfg['regions']
-
-    if not cfg:
-        error('No configuration found for account {}'.format(account_name))
 
     for region in regions:
         vpc_conn = boto.vpc.connect_to_region(region)

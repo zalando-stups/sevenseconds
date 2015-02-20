@@ -13,6 +13,18 @@ def test_print_version():
     assert result.exit_code == 0
 
 
+def test_configure_nonexisting_account(monkeypatch):
+    runner = CliRunner()
+    config = {'accounts': {}}
+
+    with runner.isolated_filesystem():
+        with open('config.yaml', 'w') as fd:
+            yaml.safe_dump(config, fd)
+        result = runner.invoke(cli, ['configure', 'config.yaml', 'myaccount'], catch_exceptions=False)
+
+    assert 'No configuration found for account myaccount' in result.output
+
+
 def test_configure(monkeypatch):
 
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
