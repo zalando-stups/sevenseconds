@@ -242,6 +242,10 @@ def configure_iam(cfg):
         with Action('Updating policy for role {role_name}..', **vars()):
             conn.put_role_policy(role_name, role_name, json.dumps(role_cfg['policy']))
 
+    res = conn.list_saml_providers()['list_saml_providers_response']['list_saml_providers_result']
+    saml_providers = res['saml_provider_list']
+    print(saml_providers)
+
 
 @cli.command()
 @click.argument('file', type=click.File('rb'))
