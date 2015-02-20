@@ -5,6 +5,12 @@ global:
     s3_bucket_name: example-bucket
     s3_key_prefix: example
   domain: "{account_name}.example.org"
+  roles:
+    Admin:
+      policy:
+          Version: 2012-10-17
+          Statement: [{"Action": "*", "Resource": "*", "Effect": "Allow"}]
+      assume_role_policy:
 accounts:
   example:
     a: b

@@ -1,7 +1,8 @@
 import click
-from netaddr import IPNetwork
+import json
 import time
 import yaml
+from netaddr import IPNetwork
 
 import aws_account_configurator
 from aws_account_configurator.console import AliasedGroup, error, Action, info
@@ -10,6 +11,7 @@ import boto.vpc
 import boto.route53
 import boto.elasticache
 import boto.rds2
+import boto.iam
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -212,6 +214,30 @@ def configure_rds(region, subnets):
                 pass
 
 
+def configure_iam(cfg):
+    # NOTE: hardcoded region as Route53 is region-independent
+    conn = boto.iam.connect_to_region('eu-west-1')
+
+    roles = cfg.get('roles', {})
+
+    summary = conn.get_account_summary()
+    print(summary)
+
+    for role_name, role_cfg in sorted(roles.items()):
+        try:
+            role = conn.get_role(role_name)
+        except:
+            with Action('Creating role {role_name}..', **vars()):
+                conn.create_role(role_name, json.dumps(role_cfg.get('assume_role_policy')).format(
+                                 account_id=account_id))
+        policies = conn.list_role_policies(role_name)
+        with Action('Updating policy for role {role_name}..', **vars()):
+            conn.put_role_policy(role_name, role_name, json.dumps(role_cfg['policy']))
+
+
+
+
+
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name')
@@ -266,6 +292,7 @@ def configure(file, account_name, dry_run):
         configure_dns(account_name, cfg)
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
+        configure_iam(cfg)
 
 
 def main():
