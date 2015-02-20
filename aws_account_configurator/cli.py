@@ -289,9 +289,12 @@ def configure(file, account_name, dry_run):
             with Action('Creating VPC for {cidr_block}..', cidr_block=str(VPC_NET)):
                 if not dry_run:
                     vpc = vpc_conn.create_vpc(str(VPC_NET))
-        with Action('Updating VPC name..'):
+        with Action('Updating VPCe..'):
             if not dry_run:
-                vpc.add_tags({'Name': '{}-{}'.format(account_name, region)})
+                tags = {'Name': '{}-{}'.format(account_name, region)}
+                additional_tags = cfg.get('vpc', {}).get('tags', {})
+                tags.update(additional_tags)
+                vpc.add_tags(tags)
         info(vpc)
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         for subnet in subnets:
