@@ -125,7 +125,7 @@ def configure_routing(ec2_conn, subnets: list, cfg: dict):
 def configure_cloudtrail(account_name, region, cfg, dry_run):
     cloudtrail = boto.cloudtrail.connect_to_region(region)
     trails = cloudtrail.describe_trails()['trailList']
-    name = '{}-{}'.format(account_name, region)
+    name = 'Default'
     trail = find_trail(trails, name)
     kwargs = dict(name=name,
                   s3_bucket_name=cfg['cloudtrail']['s3_bucket_name'],
