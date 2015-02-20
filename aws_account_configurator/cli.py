@@ -214,28 +214,33 @@ def configure_rds(region, subnets):
                 pass
 
 
+def get_account_id():
+    conn = boto.iam.connect_to_region('eu-west-1')
+    users = conn.get_all_users()['list_users_response']['list_users_result']['users']
+    arn = [u['arn'] for u in users][0]
+    account_id = arn.split(':')[4]
+    return account_id
+
+
 def configure_iam(cfg):
     # NOTE: hardcoded region as Route53 is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
 
     roles = cfg.get('roles', {})
 
-    summary = conn.get_account_summary()
-    print(summary)
+    account_id = get_account_id()
+
+    info('Account ID is {}'.format(account_id))
 
     for role_name, role_cfg in sorted(roles.items()):
         try:
-            role = conn.get_role(role_name)
+            conn.get_role(role_name)
         except:
             with Action('Creating role {role_name}..', **vars()):
                 conn.create_role(role_name, json.dumps(role_cfg.get('assume_role_policy')).format(
                                  account_id=account_id))
-        policies = conn.list_role_policies(role_name)
         with Action('Updating policy for role {role_name}..', **vars()):
             conn.put_role_policy(role_name, role_name, json.dumps(role_cfg['policy']))
-
-
-
 
 
 @cli.command()
