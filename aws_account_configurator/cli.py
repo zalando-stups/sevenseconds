@@ -71,55 +71,79 @@ def find_trail(trails: list, name):
             return trail
 
 
-def configure_routing(ec2_conn, subnets: list, cfg: dict):
-    for subnet in subnets:
-        if subnet.tags.get('Name').startswith('dmz-'):
-            az_name = subnet.availability_zone
+def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
+    nat_instance_by_az = {}
+    for subnet in [sn for sn in subnets if sn.tags.get('Name').startswith('dmz-')]:
+        az_name = subnet.availability_zone
 
-            sg_name = 'NAT {}'.format(az_name)
-            sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
-            if not sg:
-                sg = ec2_conn.create_security_group(sg_name, 'Allow internet access through NAT instances',
-                                                    vpc_id=subnet.vpc_id)
-                sg.add_tags({'Name': sg_name})
+        sg_name = 'NAT {}'.format(az_name)
+        sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
+        if not sg:
+            sg = ec2_conn.create_security_group(sg_name, 'Allow internet access through NAT instances',
+                                                vpc_id=subnet.vpc_id)
+            sg.add_tags({'Name': sg_name})
 
-                internal_subnet = [sn for sn in subnets
-                                   if sn.availability_zone == az_name and sn.tags['Name'].startswith('internal-')][0]
-                sg.authorize(ip_protocol=-1,
-                             from_port=-1,
-                             to_port=-1,
-                             cidr_ip=internal_subnet.cidr_block)
-            else:
-                sg = sg[0]
+            internal_subnet = [sn for sn in subnets
+                               if sn.availability_zone == az_name and sn.tags['Name'].startswith('internal-')][0]
+            sg.authorize(ip_protocol=-1,
+                         from_port=-1,
+                         to_port=-1,
+                         cidr_ip=internal_subnet.cidr_block)
+        else:
+            sg = sg[0]
 
-            images = ec2_conn.get_all_images(filters={'name': 'amzn-ami-vpc-nat-hvm*',
-                                                      'owner_alias': 'amazon',
-                                                      'root_device_type': 'ebs'})
-            most_recent_image = sorted(images, key=lambda i: i.name)[-1]
-            instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
-            if instances:
-                info('NAT instance {} is running with public IP {}'.format(sg_name, instances[0].ip_address))
-            else:
-                with Action('Launching NAT instance in {az_name}..', **vars()) as act:
-                    res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
-                                                 instance_type=cfg.get('instance_type', 'm3.medium'),
-                                                 security_group_ids=[sg.id],
-                                                 monitoring_enabled=True)
-                    instance = res.instances[0]
+        images = ec2_conn.get_all_images(filters={'name': 'amzn-ami-vpc-nat-hvm*',
+                                                  'owner_alias': 'amazon',
+                                                  'root_device_type': 'ebs'})
+        most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+        instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
+        if instances:
+            info('NAT instance {} is running with public IP {}'.format(sg_name, instances[0].ip_address))
+            instance = instances[0]
+        else:
+            with Action('Launching NAT instance in {az_name}..', **vars()) as act:
+                res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
+                                             instance_type=cfg.get('instance_type', 'm3.medium'),
+                                             security_group_ids=[sg.id],
+                                             monitoring_enabled=True)
+                instance = res.instances[0]
 
+                status = instance.update()
+                while status == 'pending':
+                    time.sleep(5)
                     status = instance.update()
-                    while status == 'pending':
-                        time.sleep(5)
-                        status = instance.update()
-                        act.progress()
+                    act.progress()
 
-                    if status == 'running':
-                        instance.add_tag('Name', sg_name)
+                if status == 'running':
+                    instance.add_tag('Name', sg_name)
 
-                with Action('Associating Elastic IP..'):
-                    addr = ec2_conn.allocate_address('vpc')
-                    addr.associate(instance.id)
-                info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip))
+            with Action('Associating Elastic IP..'):
+                addr = ec2_conn.allocate_address('vpc')
+                addr.associate(instance.id)
+            info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip))
+
+        nat_instance_by_az[az_name] = instance
+
+    route_tables = vpc_conn.get_all_route_tables()
+    for rt in route_tables:
+        for assoc in rt.associations:
+            if assoc.main:
+                rt.add_tags({'Name': 'DMZ Routing Table'})
+    for subnet in [sn for sn in subnets if sn.tags.get('Name').startswith('internal-')]:
+        route_table = None
+        for rt in route_tables:
+            if rt.tags.get('Name') == subnet.tags.get('Name'):
+                route_table = rt
+        instance = nat_instance_by_az[subnet.availability_zone]
+        if not route_table:
+            with Action('Creating route table {}..'.format(subnet.tags.get('Name'))):
+                route_table = vpc_conn.create_route_table(subnet.vpc_id)
+                route_table.add_tags({'Name': subnet.tags.get('Name')})
+                vpc_conn.create_route(route_table.id, destination_cidr_block='0.0.0.0/0',
+                                      instance_id=instance.id)
+
+        with Action('Associating route table..'):
+            vpc_conn.associate_route_table(route_table.id, subnet.id)
 
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
@@ -191,7 +215,7 @@ def configure(file, account_name, dry_run):
 
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
-        configure_routing(ec2_conn, subnets, cfg.get('nat', {}))
+        configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
 
 
 def main():
