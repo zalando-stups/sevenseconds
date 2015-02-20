@@ -32,6 +32,9 @@ def test_configure(monkeypatch):
     monkeypatch.setattr('boto.cloudtrail.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.elasticache.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.rds2.connect_to_region', MagicMock())
+    monkeypatch.setattr('boto.route53.connect_to_region', MagicMock())
+    monkeypatch.setattr('boto.iam.connect_to_region', MagicMock())
+    monkeypatch.setattr('aws_account_configurator.cli.get_account_id', MagicMock())
 
     runner = CliRunner()
 
