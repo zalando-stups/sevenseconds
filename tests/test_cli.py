@@ -30,6 +30,8 @@ def test_configure(monkeypatch):
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.ec2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.cloudtrail.connect_to_region', MagicMock())
+    monkeypatch.setattr('boto.elasticache.connect_to_region', MagicMock())
+    monkeypatch.setattr('boto.rds2.connect_to_region', MagicMock())
 
     runner = CliRunner()
 

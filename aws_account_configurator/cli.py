@@ -8,6 +8,8 @@ from aws_account_configurator.console import AliasedGroup, error, Action, info
 import boto.cloudtrail
 import boto.vpc
 import boto.route53
+import boto.elasticache
+import boto.rds2
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -72,9 +74,15 @@ def find_trail(trails: list, name):
             return trail
 
 
+def filter_subnets(subnets: list, _type: str):
+    for subnet in subnets:
+        if subnet.tags['Name'].startswith(_type + '-'):
+            yield subnet
+
+
 def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
     nat_instance_by_az = {}
-    for subnet in [sn for sn in subnets if sn.tags.get('Name').startswith('dmz-')]:
+    for subnet in filter_subnets(subnets, 'dmz'):
         az_name = subnet.availability_zone
 
         sg_name = 'NAT {}'.format(az_name)
@@ -84,8 +92,7 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
                                                 vpc_id=subnet.vpc_id)
             sg.add_tags({'Name': sg_name})
 
-            internal_subnet = [sn for sn in subnets
-                               if sn.availability_zone == az_name and sn.tags['Name'].startswith('internal-')][0]
+            internal_subnet = [sn for sn in filter_subnets(subnets, 'internal') if sn.availability_zone == az_name][0]
             sg.authorize(ip_protocol=-1,
                          from_port=-1,
                          to_port=-1,
@@ -130,7 +137,7 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
         for assoc in rt.associations:
             if assoc.main:
                 rt.add_tags({'Name': 'DMZ Routing Table'})
-    for subnet in [sn for sn in subnets if sn.tags.get('Name').startswith('internal-')]:
+    for subnet in filter_subnets(subnets, 'internal'):
         route_table = None
         for rt in route_tables:
             if rt.tags.get('Name') == subnet.tags.get('Name'):
@@ -179,6 +186,30 @@ def configure_dns(account_name, cfg):
     zone = zone['GetHostedZoneResponse']
     nameservers = zone['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
+
+
+def configure_elasticache(region, subnets):
+    conn = boto.elasticache.connect_to_region(region)
+    subnet_ids = [sn.id for sn in filter_subnets(subnets, 'internal')]
+    try:
+        conn.describe_cache_subnet_groups('internal')
+    except:
+        with Action('Creating ElastiCache subnet group..'):
+            conn.create_cache_subnet_group('internal', 'Default subnet group using all internal subnets', subnet_ids)
+
+
+def configure_rds(region, subnets):
+    conn = boto.rds2.connect_to_region(region)
+    subnet_ids = [sn.id for sn in filter_subnets(subnets, 'internal')]
+    try:
+        conn.describe_db_subnet_groups('internal')
+    except:
+        with Action('Creating RDS subnet group..'):
+            try:
+                conn.create_db_subnet_group('internal', 'Default subnet group using all internal subnets', subnet_ids)
+            except TypeError:
+                # ignore f**cking boto error "TypeError: the JSON object must be str, not 'bytes'"
+                pass
 
 
 @cli.command()
@@ -233,6 +264,8 @@ def configure(file, account_name, dry_run):
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         configure_dns(account_name, cfg)
+        configure_elasticache(region, subnets)
+        configure_rds(region, subnets)
 
 
 def main():
