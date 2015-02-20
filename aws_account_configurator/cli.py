@@ -156,6 +156,8 @@ def configure(file, account_name, dry_run):
     regions = cfg['regions']
 
     for region in regions:
+        configure_cloudtrail(account_name, region, cfg, dry_run)
+
         vpc_conn = boto.vpc.connect_to_region(region)
         ec2_conn = boto.ec2.connect_to_region(region)
         with Action('Checking region {region}..', **vars()):
@@ -190,7 +192,6 @@ def configure(file, account_name, dry_run):
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(ec2_conn, subnets, cfg.get('nat', {}))
-        configure_cloudtrail(account_name, region, cfg, dry_run)
 
 
 def main():
