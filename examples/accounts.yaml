@@ -4,6 +4,7 @@ global:
   cloudtrail:
     s3_bucket_name: example-bucket
     s3_key_prefix: example
+  domain: "{account_name}.example.org"
 accounts:
   example:
     a: b

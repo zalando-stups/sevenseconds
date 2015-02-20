@@ -7,6 +7,7 @@ import aws_account_configurator
 from aws_account_configurator.console import AliasedGroup, error, Action, info
 import boto.cloudtrail
 import boto.vpc
+import boto.route53
 
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -165,6 +166,21 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
                 cloudtrail.create_trail(**kwargs)
 
 
+def configure_dns(account_name, cfg):
+    dns_domain = cfg.get('domain').format(account_name=account_name)
+
+    # NOTE: hardcoded region as Route53 is region-independent
+    conn = boto.route53.connect_to_region('eu-west-1')
+    zone = conn.get_hosted_zone_by_name(dns_domain + '.')
+    if not zone:
+        with Action('Creating hosted zone..'):
+            conn.create_zone(dns_domain + '.', private_zone=False)
+    zone = conn.get_hosted_zone_by_name(dns_domain + '.')
+    zone = zone['GetHostedZoneResponse']
+    nameservers = zone['DelegationSet']['NameServers']
+    info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
+
+
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name')
@@ -216,6 +232,7 @@ def configure(file, account_name, dry_run):
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
+        configure_dns(account_name, cfg)
 
 
 def main():

@@ -39,7 +39,8 @@ def test_configure(monkeypatch):
             'cloudtrail': {
                 's3_bucket_name': 'mybucket',
                 's3_key_prefix': 'myprefix'
-            }
+            },
+            'domain': '{account_name}.example.org'
         },
         'accounts': {'myaccount': {}}}
 
