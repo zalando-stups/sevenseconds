@@ -20,3 +20,25 @@ Command line utility to configure AWS accounts:
 * Configure RDS/ElastiCache subnet groups
 * Configure IAM roles
 * Configure SAML integration
+
+Usage
+=====
+
+First install with PIP:
+
+.. code-block:: bash
+
+    $ sudo pip3 install --upgrade aws-account-configurator
+
+Run with your YAML configuration (you need valid AWS credentials for this):
+
+.. code-block:: bash
+
+    $ aws-account-configurator myconfig.yaml myaccountname
+
+Running from Source
+===================
+
+.. code-block:: bash
+
+    $ python3 -m aws_account_configurator configure myconfig.yaml myaccountname

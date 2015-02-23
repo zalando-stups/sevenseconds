@@ -1,0 +1,4 @@
+include *.txt
+include *.rst
+recursive-include aws_account_configurator *.py
+recursive-include docs *.rst *.py

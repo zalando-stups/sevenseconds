@@ -5,3 +5,4 @@ junit.xml
 .idea
 *.swp
 __pycache__
+dist/
