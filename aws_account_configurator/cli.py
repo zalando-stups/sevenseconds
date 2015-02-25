@@ -270,7 +270,7 @@ def configure(file, account_name, dry_run):
     if account_name not in accounts:
         error('No configuration found for account {}'.format(account_name))
         return
-    cfg = accounts.get(account_name)
+    cfg = accounts.get(account_name) or {}
     cfg.update(config.get('global', {}))
     regions = cfg['regions']
 
@@ -299,10 +299,6 @@ def configure(file, account_name, dry_run):
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         for subnet in subnets:
             if not subnet.tags.get('Name'):
-                acls = vpc_conn.get_all_network_acls()
-                for acl in acls:
-                    for assoc in acl.associations:
-                        print(assoc.__dict__)
                 with Action('Deleting subnet {subnet_id}..', subnet_id=subnet.id):
                     if not dry_run:
                         vpc_conn.delete_subnet(subnet.id)
