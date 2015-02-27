@@ -313,7 +313,7 @@ def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
             with Action('Associating Elastic IP..'):
                 addr = ec2_conn.allocate_address('vpc')
                 addr.associate(instance.id)
-            info('Elastic IP for SSH Bastion host is {}'.format(az_name, addr.public_ip))
+            info('Elastic IP for SSH Bastion host is {}'.format(addr.public_ip))
 
 
 @cli.command()
