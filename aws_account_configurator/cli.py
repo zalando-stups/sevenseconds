@@ -260,11 +260,64 @@ def configure_iam(cfg):
                 conn.create_saml_provider(saml_metadata_document, name)
 
 
+def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
+    try:
+        subnet = list(filter_subnets(subnets, 'dmz'))[0]
+    except:
+        return
+
+    az_name = subnet.availability_zone
+    sg_name = 'SSH Bastion Host'
+    sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
+    if not sg:
+        sg = ec2_conn.create_security_group(sg_name, 'Allow SSH access to the bastion host',
+                                            vpc_id=subnet.vpc_id)
+        sg.add_tags({'Name': sg_name})
+
+        sg.authorize(ip_protocol='tcp',
+                     from_port=22,
+                     to_port=22,
+                     cidr_ip='0.0.0.0/0')
+        sg.authorize(ip_protocol='tcp',
+                     from_port=2222,
+                     to_port=2222,
+                     cidr_ip='0.0.0.0/0')
+    else:
+        sg = sg[0]
+
+        instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
+        if instances:
+            instance = instances[0]
+            info('SSH Bastion instance {} is running with public IP {}'.format(sg_name, instance.ip_address))
+        else:
+            with Action('Launching SSH Bastion instance in {az_name}..', **vars()) as act:
+                res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
+                                             instance_type=cfg.get('instance_type', 't2.micro'),
+                                             security_group_ids=[sg.id],
+                                             monitoring_enabled=True)
+                instance = res.instances[0]
+
+                status = instance.update()
+                while status == 'pending':
+                    time.sleep(5)
+                    status = instance.update()
+                    act.progress()
+
+                if status == 'running':
+                    instance.add_tag('Name', sg_name)
+
+            with Action('Associating Elastic IP..'):
+                addr = ec2_conn.allocate_address('vpc')
+                addr.associate(instance.id)
+            info('Elastic IP for SSH Bastion host is {}'.format(az_name, addr.public_ip))
+
+
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name')
 @click.option('--dry-run', is_flag=True)
 def configure(file, account_name, dry_run):
+    '''Configure a single AWS account'''
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
     if account_name not in accounts:
@@ -311,6 +364,7 @@ def configure(file, account_name, dry_run):
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         configure_dns(account_name, cfg)
+        configure_bastion_host(ec2_conn, subnets, cfg.get('bastion', {}))
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(cfg)
