@@ -291,9 +291,13 @@ def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
             info('SSH Bastion instance {} is running with public IP {}'.format(sg_name, instance.ip_address))
         else:
             with Action('Launching SSH Bastion instance in {az_name}..', **vars()) as act:
+                user_data = '#zalando-ami-config\n{}'.format(yaml.safe_dump(cfg.get('ami_config')))
+
                 res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
                                              instance_type=cfg.get('instance_type', 't2.micro'),
                                              security_group_ids=[sg.id],
+                                             user_data=user_data.encode('utf-8'),
+                                             key_name=cfg.get('key_name'),
                                              monitoring_enabled=True)
                 instance = res.instances[0]
 
