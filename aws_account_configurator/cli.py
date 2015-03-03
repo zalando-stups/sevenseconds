@@ -311,7 +311,13 @@ def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
                     instance.add_tag('Name', sg_name)
 
             with Action('Associating Elastic IP..'):
-                addr = ec2_conn.allocate_address('vpc')
+                addr = None
+                for _addr in ec2_conn.get_all_addresses():
+                    if not _addr.instance_id:
+                        # use existing Elastic IP (e.g. to re-use IP from previous bastion host)
+                        addr = _addr
+                if not addr:
+                    addr = ec2_conn.allocate_address('vpc')
                 addr.associate(instance.id)
             info('Elastic IP for SSH Bastion host is {}'.format(addr.public_ip))
 
