@@ -250,6 +250,12 @@ def configure_iam(cfg):
                                  account_id=account_id))
         with Action('Updating policy for role {role_name}..', **vars()):
             conn.put_role_policy(role_name, role_name, json.dumps(role_cfg['policy']))
+        with Action('Removing invalid policies from role {role_name}..', **vars()):
+            res = conn.list_role_policies(role_name)
+            policy_names = res['list_role_policies_response']['list_role_policies_result']['policy_names']
+            for policy_name in policy_names:
+                if policy_name != role_name:
+                    conn.delete_role_policy(role_name, policy_name)
 
     res = conn.list_saml_providers()['list_saml_providers_response']['list_saml_providers_result']
     saml_providers = res['saml_provider_list']
