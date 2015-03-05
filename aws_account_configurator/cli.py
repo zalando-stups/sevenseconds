@@ -225,6 +225,12 @@ def get_account_id():
     return account_id
 
 
+def get_account_alias():
+    conn = boto.iam.connect_to_region('eu-west-1')
+    resp = conn.get_account_alias()
+    return resp['list_account_aliases_response']['list_account_aliases_result']['account_aliases'][0]
+
+
 def configure_iam(cfg):
     # NOTE: hardcoded region as Route53 is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
@@ -262,7 +268,18 @@ def configure_iam(cfg):
                 conn.create_saml_provider(saml_metadata_document, name)
 
 
-def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
+def substitute_template_vars(data, context: dict):
+    serialized = yaml.safe_dump(data)
+    data = yaml.safe_load(serialized)
+    for k, v in data.items():
+        if isinstance(v, str):
+            data[k] = v.format(**context)
+        elif isinstance(v, dict):
+            data[k] = substitute_template_vars(v, context)
+    return data
+
+
+def configure_bastion_host(account_name: str, ec2_conn, subnets: list, cfg: dict):
     try:
         subnet = list(filter_subnets(subnets, 'dmz'))[0]
     except:
@@ -292,8 +309,9 @@ def configure_bastion_host(ec2_conn, subnets: list, cfg: dict):
             instance = instances[0]
             info('SSH Bastion instance {} is running with public IP {}'.format(sg_name, instance.ip_address))
         else:
-            with Action('Launching SSH Bastion instance in {az_name}..', **vars()) as act:
-                user_data = '#zalando-ami-config\n{}'.format(yaml.safe_dump(cfg.get('ami_config')))
+            with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
+                config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name})
+                user_data = '#zalando-ami-config\n{}'.format(yaml.safe_dump(config))
 
                 res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
                                              instance_type=cfg.get('instance_type', 't2.micro'),
@@ -339,6 +357,12 @@ def configure(file, account_name, dry_run):
     cfg.update(config.get('global', {}))
     regions = cfg['regions']
 
+    account_alias = cfg.get('alias', account_name).format(account_name=account_name)
+
+    if account_alias != get_account_alias():
+        error('Connected to "{}", but account "{}" should be configured'.format(get_account_alias(), account_alias))
+        return
+
     for region in regions:
         configure_cloudtrail(account_name, region, cfg, dry_run)
 
@@ -376,7 +400,7 @@ def configure(file, account_name, dry_run):
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         configure_dns(account_name, cfg)
-        configure_bastion_host(ec2_conn, subnets, cfg.get('bastion', {}))
+        configure_bastion_host(account_name, ec2_conn, subnets, cfg.get('bastion', {}))
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(cfg)

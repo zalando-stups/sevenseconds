@@ -27,13 +27,17 @@ def test_configure_nonexisting_account(monkeypatch):
 
 def test_configure(monkeypatch):
 
+    iam_conn = MagicMock(get_account_alias=lambda: {'list_account_aliases_response':
+                                                    {'list_account_aliases_result':
+                                                         {'account_aliases': ['myaccount']}}})
+
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.ec2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.cloudtrail.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.elasticache.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.rds2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.route53.connect_to_region', MagicMock())
-    monkeypatch.setattr('boto.iam.connect_to_region', MagicMock())
+    monkeypatch.setattr('boto.iam.connect_to_region', lambda x: iam_conn)
     monkeypatch.setattr('aws_account_configurator.cli.get_account_id', MagicMock())
 
     runner = CliRunner()
