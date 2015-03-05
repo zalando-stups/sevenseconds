@@ -116,7 +116,7 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
                 res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
                                              instance_type=cfg.get('instance_type', 'm3.medium'),
                                              security_group_ids=[sg.id],
-                                             monitoring_enabled=True)
+                                             monitoring_enabled=True,)
                 instance = res.instances[0]
 
                 status = instance.update()
@@ -133,6 +133,8 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
                 addr.associate(instance.id)
             info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip))
 
+        with Action('Disabling source/destination checks..'):
+            ec2_conn.modify_instance_attribute(instance.id, attribute='sourceDestCheck', value=False)
         nat_instance_by_az[az_name] = instance
 
     route_tables = vpc_conn.get_all_route_tables()
