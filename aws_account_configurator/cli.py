@@ -83,7 +83,7 @@ def filter_subnets(subnets: list, _type: str):
             yield subnet
 
 
-def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
+def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
     nat_instance_by_az = {}
     for subnet in filter_subnets(subnets, 'dmz'):
         az_name = subnet.availability_zone
@@ -109,13 +109,14 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
         most_recent_image = sorted(images, key=lambda i: i.name)[-1]
         instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
         if instances:
-            info('NAT instance {} is running with public IP {}'.format(sg_name, instances[0].ip_address))
             instance = instances[0]
+            ip = instance.ip_address
         else:
             with Action('Launching NAT instance in {az_name}..', **vars()) as act:
                 res = ec2_conn.run_instances(most_recent_image.id, subnet_id=subnet.id,
                                              instance_type=cfg.get('instance_type', 'm3.medium'),
                                              security_group_ids=[sg.id],
+                                             disable_api_termination=True,
                                              monitoring_enabled=True,)
                 instance = res.instances[0]
 
@@ -131,7 +132,17 @@ def configure_routing(vpc_conn, ec2_conn, subnets: list, cfg: dict):
             with Action('Associating Elastic IP..'):
                 addr = ec2_conn.allocate_address('vpc')
                 addr.associate(instance.id)
-            info('Elastic IP for NAT {} is {}'.format(az_name, addr.public_ip))
+            ip = addr.public_ip
+        info('NAT instance {} is running with Elastic IP {}'.format(az_name, ip))
+
+        dns = 'nat-{}.{}.'.format(az_name, dns_domain)
+        with Action('Adding DNS record {}'.format(dns)):
+            dns_conn = boto.route53.connect_to_region('eu-west-1')
+            zone = dns_conn.get_zone(dns_domain + '.')
+            rr = zone.get_records()
+            change = rr.add_change('UPSERT', dns, 'A')
+            change.add_value(ip)
+            rr.commit()
 
         with Action('Disabling source/destination checks..'):
             ec2_conn.modify_instance_attribute(instance.id, attribute='sourceDestCheck', value=False)
@@ -325,6 +336,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                                              security_group_ids=[sg.id],
                                              user_data=user_data.encode('utf-8'),
                                              key_name=cfg.get('key_name'),
+                                             disable_api_termination=True,
                                              monitoring_enabled=True)
                 instance = res.instances[0]
 
@@ -417,8 +429,8 @@ def configure(file, account_name, dry_run):
 
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
-        configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         dns_domain = configure_dns(account_name, cfg)
+        configure_routing(dns_domain, vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, cfg.get('bastion', {}))
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
