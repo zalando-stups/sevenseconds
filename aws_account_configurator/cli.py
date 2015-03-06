@@ -362,6 +362,25 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                 addr.associate(instance.id)
             ip = addr.public_ip
         info('SSH Bastion instance is running with public IP {}'.format(ip))
+        ec2_conn.revoke_security_group_egress(sg.id, -1, from_port=-1, to_port=-1, cidr_ip='0.0.0.0/0')
+        rules = [
+            # allow SSH connections to our internal EC2 instances
+            ('tcp', 22, '172.31.0.0/16'),
+            # allow HTTPS to the internet (actually only needed for SSH access service)
+            ('tcp', 443, '0.0.0.0/0'),
+            # allow pings
+            ('icmp', -1, '0.0.0.0/0'),
+            # allow DNS
+            ('udp', 53, '0.0.0.0/0'),
+            ('tcp', 53, '0.0.0.0/0'),
+        ]
+        for proto, port, cidr in rules:
+            try:
+                ec2_conn.authorize_security_group_egress(sg.id, ip_protocol=proto,
+                                                         from_port=port, to_port=port, cidr_ip=cidr)
+            except boto.exception.EC2ResponseError as e:
+                if 'already exists' not in e.message:
+                    raise
         dns = 'bastion-{}.{}.'.format(az_name[:-1], dns_domain)
         dns_cname = 'bastion.{}.'.format(dns_domain)
         with Action('Adding DNS record {}'.format(dns)):
