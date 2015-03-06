@@ -258,8 +258,8 @@ def configure_iam(cfg):
             conn.get_role(role_name)
         except:
             with Action('Creating role {role_name}..', **vars()):
-                conn.create_role(role_name, json.dumps(role_cfg.get('assume_role_policy')).format(
-                                 account_id=account_id))
+                policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account_id)
+                conn.create_role(role_name, policy_document, '/')
         with Action('Updating policy for role {role_name}..', **vars()):
             conn.put_role_policy(role_name, role_name, json.dumps(role_cfg['policy']))
         with Action('Removing invalid policies from role {role_name}..', **vars()):
@@ -371,6 +371,29 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             change = rr.add_change('UPSERT', dns_cname, 'CNAME')
             change.add_value(dns)
             rr.commit()
+
+
+@cli.command()
+@click.argument('file', type=click.File('rb'))
+@click.argument('security_group')
+def update_security_group(file, security_group):
+    config = yaml.safe_load(file)
+    accounts = config.get('accounts', {})
+
+    for account_name, cfg in accounts.items():
+        if not cfg:
+            cfg = {}
+        cfg.update(config.get('global', {}))
+        for region in cfg['regions']:
+            domain = 'bastion-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))
+            print(domain)
+            import socket
+            try:
+                ai = socket.getaddrinfo(domain, 443, family=socket.AF_INET)
+            except:
+                ai = None
+                pass
+            print(ai)
 
 
 @cli.command()
