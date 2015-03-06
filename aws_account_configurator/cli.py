@@ -3,11 +3,13 @@ import json
 import requests
 import time
 import yaml
+import socket
 from netaddr import IPNetwork
 
 import aws_account_configurator
 from aws_account_configurator.console import AliasedGroup, error, Action, info
 import boto.cloudtrail
+import boto.exception
 import boto.vpc
 import boto.route53
 import boto.elasticache
@@ -375,25 +377,51 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
 
 @cli.command()
 @click.argument('file', type=click.File('rb'))
+@click.argument('region_name')
 @click.argument('security_group')
-def update_security_group(file, security_group):
+def update_security_group(file, region_name, security_group):
+    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
+
+    addresses = set()
+
+    for name, cidr in config.get('global', {}).get('trusted_networks', {}).items():
+        info('Adding trusted network {} ({})'.format(name, cidr))
+        addresses.add(cidr)
 
     for account_name, cfg in accounts.items():
         if not cfg:
             cfg = {}
         cfg.update(config.get('global', {}))
         for region in cfg['regions']:
-            domain = 'bastion-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))
-            print(domain)
-            import socket
-            try:
-                ai = socket.getaddrinfo(domain, 443, family=socket.AF_INET)
-            except:
-                ai = None
-                pass
-            print(ai)
+            domains = set(['bastion-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
+            for az in 'a', 'b', 'c':
+                domains.add('nat-{}{}.{}'.format(region, az, cfg.get('domain').format(account_name=account_name)))
+            for domain in sorted(domains):
+                with Action('Checking {}'.format(domain)):
+                    try:
+                        ai = socket.getaddrinfo(domain, 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
+                    except:
+                        ai = []
+                        pass
+                    for _, _, _, _, ip_port in ai:
+                        ip, _ = ip_port
+                        addresses.add('{}/32'.format(ip))
+
+    info('\n'.join(sorted(addresses)))
+
+    conn = boto.ec2.connect_to_region(region_name)
+    for sg in conn.get_all_security_groups():
+        if security_group in sg.name:
+            with Action('Updating security group {}..'.format(sg.name)) as act:
+                for cidr in sorted(addresses):
+                    try:
+                        sg.authorize(ip_protocol='tcp', from_port=443, to_port=443, cidr_ip=cidr)
+                    except boto.exception.EC2ResponseError as e:
+                        if 'already exists' not in e.message:
+                            raise
+                    act.progress()
 
 
 @cli.command()
