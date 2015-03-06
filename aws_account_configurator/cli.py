@@ -191,6 +191,7 @@ def configure_dns(account_name, cfg):
     zone = zone['GetHostedZoneResponse']
     nameservers = zone['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
+    return dns_domain
 
 
 def configure_elasticache(region, subnets):
@@ -285,7 +286,7 @@ def substitute_template_vars(data, context: dict):
     return data
 
 
-def configure_bastion_host(account_name: str, ec2_conn, subnets: list, cfg: dict):
+def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict):
     try:
         subnet = list(filter_subnets(subnets, 'dmz'))[0]
     except:
@@ -313,7 +314,7 @@ def configure_bastion_host(account_name: str, ec2_conn, subnets: list, cfg: dict
         instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
         if instances:
             instance = instances[0]
-            info('SSH Bastion instance {} is running with public IP {}'.format(sg_name, instance.ip_address))
+            ip = instance.ip_address
         else:
             with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
                 config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name})
@@ -345,7 +346,19 @@ def configure_bastion_host(account_name: str, ec2_conn, subnets: list, cfg: dict
                 if not addr:
                     addr = ec2_conn.allocate_address('vpc')
                 addr.associate(instance.id)
-            info('Elastic IP for SSH Bastion host is {}'.format(addr.public_ip))
+            ip = addr.public_ip
+        info('SSH Bastion instance is running with public IP {}'.format(ip))
+        dns = 'bastion-{}.{}.'.format(az_name[:-1], dns_domain)
+        dns_cname = 'bastion.{}.'.format(dns_domain)
+        with Action('Adding DNS record {}'.format(dns)):
+            dns_conn = boto.route53.connect_to_region('eu-west-1')
+            zone = dns_conn.get_zone(dns_domain + '.')
+            rr = zone.get_records()
+            change = rr.add_change('UPSERT', dns, 'A')
+            change.add_value(ip)
+            change = rr.add_change('UPSERT', dns_cname, 'CNAME')
+            change.add_value(dns)
+            rr.commit()
 
 
 @cli.command()
@@ -405,8 +418,8 @@ def configure(file, account_name, dry_run):
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         configure_routing(vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
-        configure_dns(account_name, cfg)
-        configure_bastion_host(account_name, ec2_conn, subnets, cfg.get('bastion', {}))
+        dns_domain = configure_dns(account_name, cfg)
+        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, cfg.get('bastion', {}))
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(cfg)
