@@ -1,6 +1,6 @@
-========================
-AWS Account Configurator
-========================
+========================================
+Seven Seconds - AWS Account Configurator
+========================================
 
 .. image:: https://travis-ci.org/zalando/aws-account-configurator.svg?branch=master
    :target: https://travis-ci.org/zalando/aws-account-configurator
@@ -20,7 +20,7 @@ Command line utility to configure AWS accounts:
 * Configure RDS/ElastiCache subnet groups
 * Configure IAM roles
 * Configure SAML integration
-* Configure `SSH bastion host`_
+* Configure `SSH bastion host`_ ("odd")
 
 Usage
 =====
@@ -43,11 +43,6 @@ Running from Source
 .. code-block:: bash
 
     $ python3 -m aws_account_configurator configure myconfig.yaml myaccountname
-
-ToDos
-=====
-
-* Implement SSL cert upload
 
 
 .. _SSH bastion host: https://github.com/zalando/ssh-bastion-host

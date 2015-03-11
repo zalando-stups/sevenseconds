@@ -6,3 +6,7 @@ junit.xml
 *.swp
 __pycache__
 dist/
+*.crt
+*.key
+*.csr
+*.pem

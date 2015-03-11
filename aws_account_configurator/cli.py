@@ -7,7 +7,7 @@ import socket
 from netaddr import IPNetwork
 
 import aws_account_configurator
-from aws_account_configurator.console import AliasedGroup, error, Action, info
+from aws_account_configurator.console import AliasedGroup, error, Action, info, warning
 import boto.cloudtrail
 import boto.exception
 import boto.vpc
@@ -245,7 +245,7 @@ def get_account_alias():
     return resp['list_account_aliases_response']['list_account_aliases_result']['account_aliases'][0]
 
 
-def configure_iam(cfg):
+def configure_iam(account_name: str, dns_domain: str, cfg):
     # NOTE: hardcoded region as Route53 is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
 
@@ -286,6 +286,25 @@ def configure_iam(cfg):
                 r = requests.get(url)
                 saml_metadata_document = r.text
                 conn.create_saml_provider(saml_metadata_document, name)
+
+    cert_name = dns_domain.replace('.', '-')
+    certs = conn.list_server_certs()['list_server_certificates_response']['list_server_certificates_result']
+    certs = certs['server_certificate_metadata_list']
+    cert_names = [d['server_certificate_name'] for d in certs]
+    info('Found existing SSL certs: {}'.format(', '.join(cert_names)))
+    if cert_name not in cert_names:
+        with Action('Uploading SSL server certificate..'):
+            try:
+                with open('_.' + dns_domain + '.crt') as fd:
+                    cert_body = fd.read()
+                with open('_.' + dns_domain + '.key') as fd:
+                    private_key = fd.read()
+                with open('trusted_chain.pem') as fd:
+                    cert_chain = fd.read()
+                conn.upload_server_cert(cert_name, cert_body=cert_body, private_key=private_key,
+                                        cert_chain=cert_chain)
+            except FileNotFoundError as e:
+                warning('Could not upload SSL cert: {}'.format(e))
 
 
 def substitute_template_vars(data, context: dict):
@@ -504,7 +523,7 @@ def configure(file, account_name, dry_run):
         configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, cfg.get('bastion', {}))
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
-        configure_iam(cfg)
+        configure_iam(account_name, dns_domain, cfg)
 
 
 def main():
