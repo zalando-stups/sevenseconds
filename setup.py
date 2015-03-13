@@ -27,12 +27,12 @@ def read_version(package):
         exec(fd.read(), data)
     return data['__version__']
 
-NAME = 'aws-account-configurator'
+NAME = 'stups-sevenseconds'
 MAIN_PACKAGE = 'aws_account_configurator'
 VERSION = read_version(MAIN_PACKAGE)
 DESCRIPTION = 'Configure AWS accounts'
 LICENSE = 'Apache License 2.0'
-URL = 'https://github.com/zalando/aws-account-configurator'
+URL = 'https://github.com/zalando-stups/sevenseconds'
 AUTHOR = 'Henning Jacobs'
 EMAIL = 'henning.jacobs@zalando.de'
 
@@ -54,7 +54,7 @@ CLASSIFIERS = [
     'Programming Language :: Python :: Implementation :: CPython',
 ]
 
-CONSOLE_SCRIPTS = ['aws-account-configurator = aws_account_configurator.cli:main']
+CONSOLE_SCRIPTS = ['sevenseconds = aws_account_configurator.cli:main']
 
 
 class PyTest(TestCommand):
