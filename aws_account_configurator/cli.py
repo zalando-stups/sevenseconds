@@ -325,7 +325,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
         return
 
     az_name = subnet.availability_zone
-    sg_name = 'SSH Bastion Host'
+    sg_name = 'Odd (SSH Bastion Host)'
     sg = [group for group in ec2_conn.get_all_security_groups() if group.name == sg_name]
     if not sg:
         sg = ec2_conn.create_security_group(sg_name, 'Allow SSH access to the bastion host',
