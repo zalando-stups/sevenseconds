@@ -45,4 +45,4 @@ Running from Source
     $ python3 -m aws_account_configurator configure myconfig.yaml myaccountname
 
 
-.. _SSH bastion host: https://github.com/zalando/ssh-bastion-host
+.. _SSH bastion host: https://github.com/zalando-stups/odd

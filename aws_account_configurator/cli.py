@@ -400,8 +400,8 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             except boto.exception.EC2ResponseError as e:
                 if 'already exists' not in e.message:
                     raise
-        dns = 'bastion-{}.{}.'.format(az_name[:-1], dns_domain)
-        dns_cname = 'bastion.{}.'.format(dns_domain)
+        dns = 'odd-{}.{}.'.format(az_name[:-1], dns_domain)
+        dns_cname = 'odd.{}.'.format(dns_domain)
         with Action('Adding DNS record {}'.format(dns)):
             dns_conn = boto.route53.connect_to_region('eu-west-1')
             zone = dns_conn.get_zone(dns_domain + '.')
