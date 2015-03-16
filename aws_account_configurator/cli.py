@@ -433,7 +433,7 @@ def update_security_group(file, region_name, security_group):
             cfg = {}
         cfg.update(config.get('global', {}))
         for region in cfg['regions']:
-            domains = set(['bastion-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
+            domains = set(['odd-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
             for az in 'a', 'b', 'c':
                 domains.add('nat-{}{}.{}'.format(region, az, cfg.get('domain').format(account_name=account_name)))
             for domain in sorted(domains):
