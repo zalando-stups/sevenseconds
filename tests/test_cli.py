@@ -1,7 +1,7 @@
 import pytest
 from click.testing import CliRunner
 from mock import MagicMock
-from aws_account_configurator.cli import *
+from sevenseconds.cli import *
 
 def test_print_version():
     runner = CliRunner()
@@ -38,7 +38,7 @@ def test_configure(monkeypatch):
     monkeypatch.setattr('boto.rds2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.route53.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.iam.connect_to_region', lambda x: iam_conn)
-    monkeypatch.setattr('aws_account_configurator.cli.get_account_id', MagicMock())
+    monkeypatch.setattr('sevenseconds.cli.get_account_id', MagicMock())
 
     runner = CliRunner()
 

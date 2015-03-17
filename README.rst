@@ -42,7 +42,7 @@ Running from Source
 
 .. code-block:: bash
 
-    $ python3 -m aws_account_configurator configure myconfig.yaml myaccountname
+    $ python3 -m sevenseconds configure myconfig.yaml myaccountname
 
 
 .. _SSH bastion host: https://github.com/zalando-stups/odd

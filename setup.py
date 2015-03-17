@@ -28,7 +28,7 @@ def read_version(package):
     return data['__version__']
 
 NAME = 'stups-sevenseconds'
-MAIN_PACKAGE = 'aws_account_configurator'
+MAIN_PACKAGE = 'sevenseconds'
 VERSION = read_version(MAIN_PACKAGE)
 DESCRIPTION = 'Configure AWS accounts'
 LICENSE = 'Apache License 2.0'
@@ -54,7 +54,7 @@ CLASSIFIERS = [
     'Programming Language :: Python :: Implementation :: CPython',
 ]
 
-CONSOLE_SCRIPTS = ['sevenseconds = aws_account_configurator.cli:main']
+CONSOLE_SCRIPTS = ['sevenseconds = sevenseconds.cli:main']
 
 
 class PyTest(TestCommand):

@@ -6,8 +6,8 @@ import yaml
 import socket
 from netaddr import IPNetwork
 
-import aws_account_configurator
-from aws_account_configurator.console import AliasedGroup, error, Action, info, warning
+import sevenseconds
+from sevenseconds.console import AliasedGroup, error, Action, info, warning
 import boto.cloudtrail
 import boto.exception
 import boto.vpc
@@ -25,7 +25,7 @@ VPC_NET = IPNetwork('172.31.0.0/16')
 def print_version(ctx, param, value):
     if not value or ctx.resilient_parsing:
         return
-    click.echo('AWS Account Configurator {}'.format(aws_account_configurator.__version__))
+    click.echo('AWS Account Configurator {}'.format(sevenseconds.__version__))
     ctx.exit()
 
 
