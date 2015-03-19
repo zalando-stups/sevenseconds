@@ -38,7 +38,7 @@ def test_configure(monkeypatch):
     monkeypatch.setattr('boto.rds2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.route53.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.iam.connect_to_region', lambda x: iam_conn)
-    monkeypatch.setattr('sevenseconds.cli.get_account_id', MagicMock())
+    monkeypatch.setattr('sevenseconds.aws.get_account_id', MagicMock())
 
     runner = CliRunner()
 
