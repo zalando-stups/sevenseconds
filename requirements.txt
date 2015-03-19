@@ -1,4 +1,4 @@
-click==3.3
+clickclick==0.2
 boto==2.36.0
 netaddr
 requests

@@ -7,7 +7,7 @@ import socket
 from sevenseconds.aws import configure_account
 
 import sevenseconds
-from sevenseconds.console import AliasedGroup, error, Action, info, warning
+from clickclick import AliasedGroup, error, Action, info, warning
 import boto.cloudtrail
 import boto.exception
 import boto.vpc

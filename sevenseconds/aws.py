@@ -5,7 +5,7 @@ import time
 import yaml
 from netaddr import IPNetwork
 
-from sevenseconds.console import error, Action, info, warning
+from clickclick import error, Action, info, warning
 import boto.cloudtrail
 import boto.exception
 import boto.vpc
