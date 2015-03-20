@@ -395,7 +395,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             rr.commit()
 
 
-def configure_account(account_name: str, cfg: dict, dry_run: bool=False):
+def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
     account_alias = cfg.get('alias', account_name).format(account_name=account_name)
 
     if account_alias != get_account_alias():
@@ -445,3 +445,24 @@ def configure_account(account_name: str, cfg: dict, dry_run: bool=False):
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(account_name, dns_domain, cfg)
+        configure_security_groups(cfg, region, trusted_addresses)
+
+
+def configure_security_groups(cfg: dict, region, trusted_addresses):
+    for sg_name, sg_config in cfg.get('security_groups', {}).items():
+        if sg_config.get('allow_from_trusted'):
+            update_security_group(region, sg_name, trusted_addresses)
+
+
+def update_security_group(region_name: str, security_group: str, trusted_addresses: set):
+    conn = boto.ec2.connect_to_region(region_name)
+    for sg in conn.get_all_security_groups():
+        if security_group in sg.name:
+            with Action('Updating security group {}..'.format(sg.name)) as act:
+                for cidr in sorted(trusted_addresses):
+                    try:
+                        sg.authorize(ip_protocol='tcp', from_port=443, to_port=443, cidr_ip=cidr)
+                    except boto.exception.EC2ResponseError as e:
+                        if 'already exists' not in e.message:
+                            raise
+                    act.progress()

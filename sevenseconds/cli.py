@@ -8,13 +8,6 @@ from sevenseconds.aws import configure_account
 
 import sevenseconds
 from clickclick import AliasedGroup, error, Action, info, warning
-import boto.cloudtrail
-import boto.exception
-import boto.vpc
-import boto.route53
-import boto.elasticache
-import boto.rds2
-import boto.iam
 from aws_saml_login import authenticate, assume_role, write_aws_credentials
 
 
@@ -34,13 +27,7 @@ def cli():
     pass
 
 
-@cli.command()
-@click.argument('file', type=click.File('rb'))
-@click.argument('region_name')
-@click.argument('security_group')
-def update_security_group(file, region_name, security_group):
-    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
-    config = yaml.safe_load(file)
+def get_trusted_addresses(config: dict):
     accounts = config.get('accounts', {})
 
     addresses = set()
@@ -68,29 +55,33 @@ def update_security_group(file, region_name, security_group):
                         ip, _ = ip_port
                         addresses.add('{}/32'.format(ip))
 
+    return addresses
+
+
+@cli.command()
+@click.argument('file', type=click.File('rb'))
+@click.argument('region_name')
+@click.argument('security_group')
+def update_security_group(file, region_name, security_group):
+    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
+    config = yaml.safe_load(file)
+
+    addresses = get_trusted_addresses(config)
+
     info('\n'.join(sorted(addresses)))
 
-    conn = boto.ec2.connect_to_region(region_name)
-    for sg in conn.get_all_security_groups():
-        if security_group in sg.name:
-            with Action('Updating security group {}..'.format(sg.name)) as act:
-                for cidr in sorted(addresses):
-                    try:
-                        sg.authorize(ip_protocol='tcp', from_port=443, to_port=443, cidr_ip=cidr)
-                    except boto.exception.EC2ResponseError as e:
-                        if 'already exists' not in e.message:
-                            raise
-                    act.progress()
+    update_security_group(region_name, security_group, addresses)
 
 
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name_pattern')
-@click.option('--saml-user', envvar='SAML_USER')
-@click.option('--saml-password', envvar='SAML_PASSWORD')
+@click.option('--saml-user', help='SAML username', envvar='SAML_USER')
+@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
+              envvar='SAML_PASSWORD')
 @click.option('--dry-run', is_flag=True)
 def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
-    '''Configure a single AWS account'''
+    '''Configure one or more AWS account(s) matching the provided pattern'''
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
 
@@ -99,6 +90,8 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     if not account_names:
         error('No configuration found for account {}'.format(account_name_pattern))
         return
+
+    trusted_addresses = get_trusted_addresses(config)
 
     for account_name in account_names:
         cfg = accounts.get(account_name) or {}
@@ -130,7 +123,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
             write_aws_credentials('default', key_id, secret, session_token)
 
         try:
-            configure_account(account_name, cfg, dry_run)
+            configure_account(account_name, cfg, trusted_addresses, dry_run)
         except Exception:
             error('Error while configuring {}: {}'.format(account_name, traceback.format_exc()))
 

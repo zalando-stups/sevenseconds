@@ -1,10 +1,15 @@
 global:
+  alias: "myorg-{account_name}"
   regions:
     - eu-central-1
   cloudtrail:
     s3_bucket_name: example-bucket
     s3_key_prefix: example
   domain: "{account_name}.example.org"
+  saml_providers:
+    Shibboleth: "https://idp.example.org/shibboleth"
+  saml_identity_provider_url: "https://idp-login.example.org"
+  saml_admin_login_role: "Admin"
   roles:
     Admin:
       policy:
