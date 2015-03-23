@@ -10,6 +10,9 @@ global:
     Shibboleth: "https://idp.example.org/shibboleth"
   saml_identity_provider_url: "https://idp-login.example.org"
   saml_admin_login_role: "Admin"
+  base_ami:
+    name: "Taupage-AMI-*"
+    is_public: false
   roles:
     Admin:
       policy:

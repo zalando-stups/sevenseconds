@@ -1,4 +1,3 @@
-
 import json
 import requests
 import time
@@ -67,6 +66,24 @@ def filter_subnets(subnets: list, _type: str):
             yield subnet
 
 
+def get_base_ami_id(ec2_conn, cfg: dict):
+    base_ami = cfg['base_ami']
+    name = base_ami['name']
+    with Action('Searching for latest "{}" AMI..'.format(name)):
+        filters = {'name': name,
+                   'is_public': str(base_ami['is_public']).lower(),
+                   'state': 'available',
+                   'root_device_type': 'ebs'}
+        if 'owner_id' in base_ami:
+            filters['owner_id'] = base_ami['owner_id']
+        images = ec2_conn.get_all_images(filters=filters)
+        if not images:
+            raise Exception("No AMI found for {}".format(filters))
+        most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+    info('Most recent AMI is "{}" ({})'.format(most_recent_image.name, most_recent_image.id))
+    return most_recent_image.id
+
+
 def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
     nat_instance_by_az = {}
     for subnet in filter_subnets(subnets, 'dmz'):
@@ -101,7 +118,7 @@ def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
                                              instance_type=cfg.get('instance_type', 'm3.medium'),
                                              security_group_ids=[sg.id],
                                              disable_api_termination=True,
-                                             monitoring_enabled=True,)
+                                             monitoring_enabled=True, )
                 instance = res.instances[0]
 
                 status = instance.update()
@@ -304,7 +321,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
     try:
         subnet = list(filter_subnets(subnets, 'dmz'))[0]
     except:
-        return
+        warning('No DMZ subnet found')
 
     az_name = subnet.availability_zone
     sg_name = 'Odd (SSH Bastion Host)'
@@ -411,6 +428,9 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         ec2_conn = boto.ec2.connect_to_region(region)
         with Action('Checking region {region}..', **vars()):
             availability_zones = ec2_conn.get_all_zones()
+
+        ami_id = get_base_ami_id(ec2_conn, cfg)
+
         info('Availability zones: {}'.format(availability_zones))
         with Action('Finding VPC..'):
             vpc = find_vpc(vpc_conn)
@@ -423,6 +443,8 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
             if not dry_run:
                 tags = {'Name': '{}-{}'.format(account_name, region)}
                 additional_tags = cfg.get('vpc', {}).get('tags', {})
+                for key, val in additional_tags.items():
+                    additional_tags[key] = val.replace('{{ami_id}}', ami_id)
                 tags.update(additional_tags)
                 vpc.add_tags(tags)
         info(vpc)
@@ -441,7 +463,9 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         dns_domain = configure_dns(account_name, cfg)
         configure_routing(dns_domain, vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
-        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, cfg.get('bastion', {}))
+        odd_cfg = cfg.get('bastion', {})
+        odd_cfg['ami_id'] = ami_id
+        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, odd_cfg)
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(account_name, dns_domain, cfg)

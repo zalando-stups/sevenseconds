@@ -39,11 +39,16 @@ def test_configure(monkeypatch):
     monkeypatch.setattr('boto.route53.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.iam.connect_to_region', lambda x: iam_conn)
     monkeypatch.setattr('sevenseconds.aws.get_account_id', MagicMock())
+    monkeypatch.setattr('sevenseconds.aws.get_base_ami_id', MagicMock(result='ami-123'))
 
     runner = CliRunner()
 
     config = {
         'global': {
+            'base_ami': {
+                'name': 'MyBaseAmi*',
+                'is_public': False
+            },
             'regions': ['region-1'],
             'cloudtrail': {
                 's3_bucket_name': 'mybucket',

@@ -37,7 +37,13 @@ Run with your YAML configuration (you need valid AWS credentials for this):
 
 .. code-block:: bash
 
-    $ sevenseconds myconfig.yaml myaccountname
+    $ sevenseconds configure myconfig.yaml myaccountname
+
+You can also run Seven Seconds on all configured accounts with automatic SAML logins:
+
+.. code-block:: bash
+
+    $ sevenseconds configure --saml-user=mysamluser myconfig.yaml '*'
 
 Running from Source
 ===================
