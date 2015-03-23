@@ -185,6 +185,11 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
             if not dry_run:
                 cloudtrail.update_trail(**kwargs)
     else:
+        if trails:
+            for trail in trails:
+                name = trail.get('Name')
+                with Action('Deleting invalid trail {}..'.format(name)):
+                    cloudtrail.delete_trail(name)
         with Action('Enabling CloudTrail..'):
             if not dry_run:
                 cloudtrail.create_trail(**kwargs)
