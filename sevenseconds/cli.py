@@ -36,9 +36,10 @@ def get_trusted_addresses(config: dict):
         info('Adding trusted network {} ({})'.format(name, cidr))
         addresses.add(cidr)
 
-    for account_name, cfg in accounts.items():
-        if not cfg:
-            cfg = {}
+    for account_name, _cfg in accounts.items():
+        cfg = {}
+        if _cfg:
+            cfg.update(_cfg)
         cfg.update(config.get('global', {}))
         for region in cfg['regions']:
             domains = set(['odd-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
@@ -93,9 +94,13 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
 
     trusted_addresses = get_trusted_addresses(config)
 
+    global_cfg = config.get('global', {})
+
     for account_name in account_names:
-        cfg = accounts.get(account_name) or {}
-        cfg.update(config.get('global', {}))
+        cfg = accounts.get(account_name)
+        for key, val in global_cfg.items():
+            if key not in cfg:
+                cfg[key] = val
 
         saml_url = cfg.get('saml_identity_provider_url')
         saml_role = cfg.get('saml_admin_login_role')
