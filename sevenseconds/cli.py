@@ -97,7 +97,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     global_cfg = config.get('global', {})
 
     for account_name in account_names:
-        cfg = accounts.get(account_name)
+        cfg = accounts.get(account_name) or {}
         for key, val in global_cfg.items():
             if key not in cfg:
                 cfg[key] = val
