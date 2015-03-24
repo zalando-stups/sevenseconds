@@ -2,6 +2,7 @@ import json
 import requests
 import time
 import yaml
+import netaddr
 from netaddr import IPNetwork
 
 from clickclick import error, Action, info, warning
@@ -491,12 +492,41 @@ def configure_security_groups(cfg: dict, region, trusted_addresses):
             update_security_group(region, sg_name, trusted_addresses)
 
 
+def chunks(l, n):
+    """ Yield successive n-sized chunks from l.
+    """
+    for i in range(0, len(l), n):
+        yield l[i:i+n]
+
+
+def consolidate_networks(networks: set, min_prefixlen: int):
+    networks = sorted([IPNetwork(net) for net in networks])
+    new_networks = []
+    for chunk in chunks(networks, 2):
+        if len(chunk) > 1:
+            spanning = netaddr.spanning_cidr(chunk)
+            if spanning.prefixlen >= min_prefixlen:
+                new_networks.append(spanning)
+            else:
+                new_networks.extend(chunk)
+        else:
+            new_networks.append(chunk[0])
+    merged = netaddr.cidr_merge(new_networks)
+    return merged
+
+
 def update_security_group(region_name: str, security_group: str, trusted_addresses: set):
+    networks = trusted_addresses
+    prefixlen = 31
+    while len(networks) > 50:
+        networks = consolidate_networks(networks, prefixlen)
+        prefixlen -= 1
+    info('Prefixlen: {}, {} networks: {}'.format(prefixlen, len(networks), networks))
     conn = boto.ec2.connect_to_region(region_name)
     for sg in conn.get_all_security_groups():
         if security_group in sg.name:
             with Action('Updating security group {}..'.format(sg.name)) as act:
-                for cidr in sorted(trusted_addresses):
+                for cidr in sorted(networks):
                     try:
                         sg.authorize(ip_protocol='tcp', from_port=443, to_port=443, cidr_ip=cidr)
                     except boto.exception.EC2ResponseError as e:
@@ -523,4 +553,3 @@ def destroy_account(account_name, region):
     for addr in addresses:
         with Action('Releasing Elastic IP {}..'.format(addr)):
             addr.release()
-
