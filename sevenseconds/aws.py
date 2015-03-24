@@ -12,6 +12,7 @@ import boto.route53
 import boto.elasticache
 import boto.rds2
 import boto.iam
+import boto.ec2.autoscale
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
@@ -502,3 +503,24 @@ def update_security_group(region_name: str, security_group: str, trusted_address
                         if 'already exists' not in e.message:
                             raise
                     act.progress()
+
+
+def destroy_account(account_name, region):
+    if not get_account_alias().endswith(account_name):
+        raise Exception('Wrong account alias')
+    conn = boto.ec2.autoscale.connect_to_region(region)
+    groups = conn.get_all_groups()
+    for group in groups:
+        with Action('Shutting down {}..'.format(group)):
+            group.shutdown_instances()
+
+    conn = boto.ec2.connect_to_region(region)
+    instances = conn.get_only_instances()
+    for instance in instances:
+        conn.terminate_instances(instance_ids=[instance.id])
+
+    addresses = conn.get_all_addresses()
+    for addr in addresses:
+        with Action('Releasing Elastic IP {}..'.format(addr)):
+            addr.release()
+

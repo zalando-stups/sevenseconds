@@ -4,7 +4,7 @@ import click
 import keyring
 import yaml
 import socket
-from sevenseconds.aws import configure_account
+from sevenseconds.aws import configure_account, destroy_account
 
 import sevenseconds
 from clickclick import AliasedGroup, error, Action, info, warning
@@ -131,6 +131,13 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
             configure_account(account_name, cfg, trusted_addresses, dry_run)
         except Exception:
             error('Error while configuring {}: {}'.format(account_name, traceback.format_exc()))
+
+
+@cli.command()
+@click.argument('account_name')
+@click.argument('region')
+def destroy(account_name, region):
+    destroy_account(account_name, region)
 
 
 def main():
