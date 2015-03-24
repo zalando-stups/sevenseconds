@@ -238,7 +238,14 @@ def configure_rds(region, subnets):
 def get_account_id():
     conn = boto.iam.connect_to_region('eu-west-1')
     users = conn.get_all_users()['list_users_response']['list_users_result']['users']
-    arn = [u['arn'] for u in users][0]
+    if not users:
+        with Action('Creating temporary IAM role to determine account ID..'):
+            temp_role_name = 'temp-sevenseconds-account-id'
+            res = conn.create_role(temp_role_name)
+            arn = res['create_role_response']['create_role_result']['role']['arn']
+            conn.delete_role(temp_role_name)
+    else:
+        arn = [u['arn'] for u in users][0]
     account_id = arn.split(':')[4]
     return account_id
 
