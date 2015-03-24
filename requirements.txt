@@ -2,5 +2,5 @@ clickclick==0.3
 boto==2.36.0
 netaddr
 requests
-aws-saml-login==0.4
+aws-saml-login==0.5
 keyring
