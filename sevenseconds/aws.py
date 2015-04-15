@@ -394,7 +394,11 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                 addr.associate(instance.id)
             ip = addr.public_ip
         info('SSH Bastion instance is running with public IP {}'.format(ip))
-        ec2_conn.revoke_security_group_egress(sg.id, -1, from_port=-1, to_port=-1, cidr_ip='0.0.0.0/0')
+        try:
+            ec2_conn.revoke_security_group_egress(sg.id, -1, from_port=-1, to_port=-1, cidr_ip='0.0.0.0/0')
+        except boto.exception.EC2ResponseError as e:
+            if 'rule does not exist' not in e.message:
+                raise
         rules = [
             # allow SSH connections to our internal EC2 instances
             ('tcp', 22, '172.31.0.0/16'),
