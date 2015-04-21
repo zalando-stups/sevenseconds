@@ -400,8 +400,8 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             if 'rule does not exist' not in e.message:
                 raise
         rules = [
-            # allow SSH connections to our internal EC2 instances
-            ('tcp', 22, '172.31.0.0/16'),
+            # allow ALL connections to our internal EC2 instances
+            ('tcp', -1, '172.31.0.0/16'),
             # allow HTTPS to the internet (actually only needed for SSH access service)
             ('tcp', 443, '0.0.0.0/0'),
             # allow pings
