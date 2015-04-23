@@ -531,12 +531,14 @@ def update_security_group(region_name: str, security_group: str, trusted_address
     for sg in conn.get_all_security_groups():
         if security_group in sg.name:
             for rule in sg.rules:
-                info('Entrys from {}: {} {} {} {}'.format(sg.name, rule.ip_protocol, rule.from_port, rule.to_port, rule.grants))
-                ipgrants = [IPNetwork('{}'.format(grant)) for grant in rule.grants ]
+                info('Entrys from {}: {} {} {} {}'.format(sg.name, rule.ip_protocol,
+                                                          rule.from_port, rule.to_port, rule.grants))
+                ipgrants = [IPNetwork('{}'.format(grant)) for grant in rule.grants]
                 for grant in ipgrants:
                     if grant not in networks:
                         warning('Remove {} from security group {}'.format(grant, sg.name))
-                        sg.revoke(ip_protocol=rule.ip_protocol, from_port=rule.from_port, to_port=rule.to_port, cidr_ip=grant)
+                        sg.revoke(ip_protocol=rule.ip_protocol, from_port=rule.from_port,
+                                  to_port=rule.to_port, cidr_ip=grant)
             with Action('Updating security group {}..'.format(sg.name)) as act:
                 for cidr in sorted(networks):
                     try:
