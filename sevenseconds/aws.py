@@ -401,19 +401,19 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                 raise
         rules = [
             # allow ALL connections to our internal EC2 instances
-            ('tcp', -1, '172.31.0.0/16'),
+            ('tcp', 0, 65535, '172.31.0.0/16'),
             # allow HTTPS to the internet (actually only needed for SSH access service)
-            ('tcp', 443, '0.0.0.0/0'),
+            ('tcp', 443, 443, '0.0.0.0/0'),
             # allow pings
-            ('icmp', -1, '0.0.0.0/0'),
+            ('icmp', -1, -1, '0.0.0.0/0'),
             # allow DNS
-            ('udp', 53, '0.0.0.0/0'),
-            ('tcp', 53, '0.0.0.0/0'),
+            ('udp', 53, 53, '0.0.0.0/0'),
+            ('tcp', 53, 53, '0.0.0.0/0'),
         ]
-        for proto, port, cidr in rules:
+        for proto, from_port, to_port, cidr in rules:
             try:
                 ec2_conn.authorize_security_group_egress(sg.id, ip_protocol=proto,
-                                                         from_port=port, to_port=port, cidr_ip=cidr)
+                                                         from_port=from_port, to_port=to_port, cidr_ip=cidr)
             except boto.exception.EC2ResponseError as e:
                 if 'already exists' not in e.message:
                     raise
