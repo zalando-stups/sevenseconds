@@ -522,13 +522,23 @@ def consolidate_networks(networks: set, min_prefixlen: int):
 def update_security_group(region_name: str, security_group: str, trusted_addresses: set):
     networks = trusted_addresses
     prefixlen = 31
+    # FIXME the Networkcount is depending on exist Entrys and Port-Count!
     while len(networks) > 50:
         networks = consolidate_networks(networks, prefixlen)
         prefixlen -= 1
-    info('Prefixlen: {}, {} networks: {}'.format(prefixlen, len(networks), networks))
+    info('{}/{} Prefixlen: {}, {} networks: {}'.format(region_name, security_group, prefixlen, len(networks), networks))
     conn = boto.ec2.connect_to_region(region_name)
     for sg in conn.get_all_security_groups():
         if security_group in sg.name:
+            for rule in sg.rules:
+                info('Entrys from {}: {} {} {} {}'.format(sg.name, rule.ip_protocol,
+                                                          rule.from_port, rule.to_port, rule.grants))
+                ipgrants = [IPNetwork('{}'.format(grant)) for grant in rule.grants]
+                for grant in ipgrants:
+                    if grant not in networks:
+                        warning('Remove {} from security group {}'.format(grant, sg.name))
+                        sg.revoke(ip_protocol=rule.ip_protocol, from_port=rule.from_port,
+                                  to_port=rule.to_port, cidr_ip=grant)
             with Action('Updating security group {}..'.format(sg.name)) as act:
                 for cidr in sorted(networks):
                     try:
