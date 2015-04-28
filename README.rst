@@ -22,7 +22,7 @@ Command line utility to configure AWS accounts:
 * Configure SAML integration
 * Configure `SSH bastion host`_ ("odd")
 
-See the `STUPS Landscape Overview`_.
+See the `STUPS Landscape Overview`_ and the `STUPS Installation Guide`_.
 
 Usage
 =====
@@ -52,6 +52,14 @@ Running from Source
 
     $ python3 -m sevenseconds configure myconfig.yaml myaccountname
 
+Releasing
+=========
+
+.. code-block:: bash
+
+    $ ./release.sh <NEW-VERSION>
+
 
 .. _SSH bastion host: https://github.com/zalando-stups/odd
 .. _STUPS Landscape Overview: https://zalando-stups.github.io/
+.. _STUPS Installation Guide: http://stups.readthedocs.org/en/latest/installation/index.html
