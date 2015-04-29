@@ -38,19 +38,20 @@ def get_trusted_addresses(config: dict):
 
     for account_name, _cfg in accounts.items():
         cfg = {}
+        cfg.update(config.get('global', {}))
         if _cfg:
             cfg.update(_cfg)
-        cfg.update(config.get('global', {}))
         for region in cfg['regions']:
             domains = set(['odd-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
-            for az in 'a', 'b', 'c':
+            for az in 'a', 'b', 'c', 'd', 'e':
                 domains.add('nat-{}{}.{}'.format(region, az, cfg.get('domain').format(account_name=account_name)))
             for domain in sorted(domains):
-                with Action('Checking {}'.format(domain)):
+                with Action('Checking {}'.format(domain)) as act:
                     try:
                         ai = socket.getaddrinfo(domain, 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
                     except:
                         ai = []
+                        act.error('n/a')
                         pass
                     for _, _, _, _, ip_port in ai:
                         ip, _ = ip_port
