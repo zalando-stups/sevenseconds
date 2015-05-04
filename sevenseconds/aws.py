@@ -17,6 +17,8 @@ import boto.ec2.autoscale
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
+AZ_NAMES_BY_REGION = {}
+
 
 def find_vpc(conn):
     for vpc in conn.get_all_vpcs():
@@ -38,6 +40,16 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
             if not dry_run:
                 subnet = vpc_conn.create_subnet(vpc.id, str(net), availability_zone=az.name)
                 subnet.add_tags({'Name': name})
+
+
+def get_az_names(region: str):
+    names = AZ_NAMES_BY_REGION.get(region)
+    if not names:
+        conn = boto.ec2.connect_to_region(region)
+        ec2_zones = conn.get_all_zones(filters={'state': 'available'})
+        names = [z.name for z in ec2_zones]
+        AZ_NAMES_BY_REGION[region] = names
+    return names
 
 
 def calculate_subnet(vpc_net: IPNetwork, _type: str, az_index: int):
@@ -357,6 +369,18 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
         sg = sg[0]
 
         instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
+        re_deploy = cfg.get('re_deploy')
+        if instances and re_deploy:
+            for instance in instances:
+                with Action('Terminating SSH Bastion host for redeployment..') as act:
+                    instance.modify_attribute('DisableApiTermination', False)
+                    instance.terminate()
+                    status = instance.update()
+                    while status != 'terminated':
+                        time.sleep(5)
+                        status = instance.update()
+                        act.progress()
+            instances = None
         if instances:
             instance = instances[0]
             ip = instance.ip_address
@@ -418,15 +442,12 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                 if 'already exists' not in e.message:
                     raise
         dns = 'odd-{}.{}.'.format(az_name[:-1], dns_domain)
-        dns_cname = 'odd.{}.'.format(dns_domain)
         with Action('Adding DNS record {}'.format(dns)):
             dns_conn = boto.route53.connect_to_region('eu-west-1')
             zone = dns_conn.get_zone(dns_domain + '.')
             rr = zone.get_records()
             change = rr.add_change('UPSERT', dns, 'A')
             change.add_value(ip)
-            change = rr.add_change('UPSERT', dns_cname, 'CNAME')
-            change.add_value(dns)
             rr.commit()
 
 

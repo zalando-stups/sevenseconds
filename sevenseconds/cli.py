@@ -4,7 +4,7 @@ import click
 import keyring
 import yaml
 import socket
-from sevenseconds.aws import configure_account, destroy_account
+from sevenseconds.aws import configure_account, destroy_account, get_az_names
 
 import sevenseconds
 from clickclick import AliasedGroup, error, Action, info, warning
@@ -43,8 +43,8 @@ def get_trusted_addresses(config: dict):
             cfg.update(_cfg)
         for region in cfg['regions']:
             domains = set(['odd-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
-            for az in 'a', 'b', 'c', 'd', 'e':
-                domains.add('nat-{}{}.{}'.format(region, az, cfg.get('domain').format(account_name=account_name)))
+            for az in get_az_names(region):
+                domains.add('nat-{}.{}'.format(az, cfg.get('domain').format(account_name=account_name)))
             for domain in sorted(domains):
                 with Action('Checking {}'.format(domain)) as act:
                     try:
@@ -93,7 +93,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
         error('No configuration found for account {}'.format(account_name_pattern))
         return
 
-    trusted_addresses = get_trusted_addresses(config)
+    trusted_addresses = None
 
     global_cfg = config.get('global', {})
 
@@ -127,6 +127,9 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
             with Action('Assuming role {}..'.format(role)):
                 key_id, secret, session_token = assume_role(saml_xml, role[0], role[1])
             write_aws_credentials('default', key_id, secret, session_token)
+
+        if not trusted_addresses:
+            trusted_addresses = get_trusted_addresses(config)
 
         try:
             configure_account(account_name, cfg, trusted_addresses, dry_run)
