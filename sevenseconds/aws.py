@@ -3,6 +3,7 @@ import requests
 import time
 import yaml
 import netaddr
+import socket
 from netaddr import IPNetwork
 
 from clickclick import error, Action, info, warning
@@ -343,6 +344,24 @@ def substitute_template_vars(data, context: dict):
     return data
 
 
+def wait_for_ssh_port(host: str, timeout: int):
+    start = time.time()
+    with Action('Waiting for SSH port of {}..'.format(host)) as act:
+        while True:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            try:
+                result = sock.connect_ex((host, 22))
+            except:
+                pass
+            if result == 0:
+                break
+            if time.time() - start > timeout:
+                act.error('TIMEOUT')
+                break
+            time.sleep(5)
+            act.progress()
+
+
 def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict):
     try:
         subnet = list(filter_subnets(subnets, 'dmz'))[0]
@@ -449,6 +468,8 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             change = rr.add_change('UPSERT', dns, 'A')
             change.add_value(ip)
             rr.commit()
+
+        wait_for_ssh_port(dns, 300)
 
 
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
