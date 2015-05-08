@@ -15,6 +15,7 @@ import boto.elasticache
 import boto.rds2
 import boto.iam
 import boto.ec2.autoscale
+import boto.s3
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
@@ -529,7 +530,27 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(account_name, dns_domain, cfg)
+        configure_s3_buckets(account_name, cfg, region)
         configure_security_groups(cfg, region, trusted_addresses)
+
+
+def configure_s3_buckets(account_name: str, cfg: dict, region):
+    s3 = boto.s3.connect_to_region(region)
+    account_id = get_account_id()
+    for _, config in cfg.get('s3_buckets', {}).items():
+        bucket_name = config['name']
+        bucket_name = bucket_name.replace('{account_id}', account_id).replace('{region}', region)
+        if region in config.get('regions', []):
+            with Action('Checking S3 bucket {}..'.format(bucket_name)):
+                bucket = s3.lookup(bucket_name)
+            if not bucket:
+                with Action('Creating S3 bucket {}..'.format(bucket_name)):
+                    s3.create_bucket(bucket_name, location=region)
+            with Action('Updating policy for S3 bucket {}..'.format(bucket_name)):
+                bucket = s3.lookup(bucket_name)
+                policy_json = json.dumps(config.get('policy'))
+                policy_json = policy_json.replace('{bucket_name}', bucket_name)
+                bucket.set_policy(policy_json)
 
 
 def configure_security_groups(cfg: dict, region, trusted_addresses):
