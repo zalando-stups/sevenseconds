@@ -353,7 +353,7 @@ def wait_for_ssh_port(host: str, timeout: int):
             try:
                 result = sock.connect_ex((host, 22))
             except:
-                pass
+                result = -1
             if result == 0:
                 break
             if time.time() - start > timeout:
