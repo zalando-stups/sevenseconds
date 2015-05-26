@@ -200,15 +200,18 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
         with Action('Updating CloudTrail..'):
             if not dry_run:
                 cloudtrail.update_trail(**kwargs)
+                cloudtrail.start_logging(name)
     else:
         if trails:
             for trail in trails:
                 name = trail.get('Name')
                 with Action('Deleting invalid trail {}..'.format(name)):
+                    cloudtrail.stop_logging(name)
                     cloudtrail.delete_trail(name)
         with Action('Enabling CloudTrail..'):
             if not dry_run:
                 cloudtrail.create_trail(**kwargs)
+                cloudtrail.start_logging(name)
 
 
 def configure_dns(account_name, cfg):
