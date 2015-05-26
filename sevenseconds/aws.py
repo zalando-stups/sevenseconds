@@ -227,7 +227,26 @@ def configure_dns(account_name, cfg):
     zone = zone['GetHostedZoneResponse']
     nameservers = zone['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
+    with Action('Set up DNS Delegation..'):
+        try:
+            configure_dns_delegation(account_name, nameservers, cfg)
+        except:
+            warning('DNS Delegation not possible')
     return dns_domain
+
+
+def configure_dns_delegation(account_name, nameservers, cfg):
+    dns_conn = boto.route53.connect_to_region('eu-west-1', profile_name='adminaccount')
+    account_dns_domain = cfg.get('domain').format(account_name=account_name)
+    tld_dns_domain = cfg.get('domain').format(account_name='')
+    tld_dns_domain = tld_dns_domain.strip('.')
+    zone = dns_conn.get_zone(tld_dns_domain + '.')
+    rr = zone.get_records()
+    change = rr.add_change('UPSERT', account_dns_domain, 'NS')
+    for ip in nameservers:
+        change.add_value(ip)
+    rr.commit()
+
 
 
 def configure_elasticache(region, subnets):
