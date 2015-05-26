@@ -248,7 +248,6 @@ def configure_dns_delegation(account_name, nameservers, cfg):
     rr.commit()
 
 
-
 def configure_elasticache(region, subnets):
     conn = boto.elasticache.connect_to_region(region)
     subnet_ids = [sn.id for sn in filter_subnets(subnets, 'internal')]
