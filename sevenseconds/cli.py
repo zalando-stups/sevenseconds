@@ -96,6 +96,29 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     trusted_addresses = None
 
     global_cfg = config.get('global', {})
+    saml_url = global_cfg.get('saml_identity_provider_url')
+    saml_role = global_cfg.get('saml_admin_login_role')
+
+    if saml_user and saml_url and saml_role:
+        if not saml_password:
+            saml_password = keyring.get_password('sevenseconds', saml_user)
+        if not saml_password:
+            saml_password = click.prompt('Please enter your SAML password', hide_input=True)
+
+        with Action('Authenticating against {}..'.format(saml_url)):
+            saml_xml, roles = authenticate(saml_url, saml_user, saml_password)
+        keyring.set_password('sevenseconds', saml_user, saml_password)
+
+        admin_account = global_cfg.get('admin_account')
+        matching_roles = [(parn, rarn, aname)
+                          for parn, rarn, aname in roles if aname == admin_account and rarn.endswith(saml_role)]
+        if not matching_roles:
+            warning('No matching role found for Admin account {}: {}'.format(admin_account, roles))
+        else:
+            role = matching_roles[0]
+            with Action('Assuming role {}..'.format(role)):
+                key_id, secret, session_token = assume_role(saml_xml, role[0], role[1])
+            write_aws_credentials('adminaccount', key_id, secret, session_token)
 
     for account_name in account_names:
         cfg = accounts.get(account_name) or {}
