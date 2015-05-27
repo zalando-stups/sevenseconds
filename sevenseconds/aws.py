@@ -242,7 +242,7 @@ def configure_dns_delegation(account_name, nameservers, cfg):
     tld_dns_domain = tld_dns_domain.strip('.')
     zone = dns_conn.get_zone(tld_dns_domain + '.')
     rr = zone.get_records()
-    change = rr.add_change('UPSERT', account_dns_domain, 'NS')
+    change = rr.add_change('UPSERT', account_dns_domain, 'NS', ttl=7200)
     for ip in nameservers:
         change.add_value(ip)
     rr.commit()
