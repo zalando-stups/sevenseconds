@@ -227,11 +227,11 @@ def configure_dns(account_name, cfg):
     zone = zone['GetHostedZoneResponse']
     nameservers = zone['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
-    with Action('Set up DNS Delegation..'):
+    with Action('Set up DNS Delegation..') as act:
         try:
             configure_dns_delegation(account_name, nameservers, cfg)
         except:
-            warning('DNS Delegation not possible')
+            act.error('DNS Delegation not possible')
     return dns_domain
 
 
