@@ -491,7 +491,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
             change.add_value(ip)
             rr.commit()
 
-        wait_for_ssh_port(dns, 300)
+        wait_for_ssh_port(ip, 300)
 
 
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
