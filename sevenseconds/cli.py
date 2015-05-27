@@ -83,7 +83,17 @@ def update_security_group(file, region_name, security_group):
               envvar='SAML_PASSWORD')
 @click.option('--dry-run', is_flag=True)
 def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
-    '''Configure one or more AWS account(s) matching the provided pattern'''
+    '''Configure one or more AWS account(s) matching the provided pattern
+
+       ACCOUNT_NAME_PATTERN are Unix shell style:
+
+       \b
+         *       matches everything
+         ?       matches any single character
+         [seq]   matches any character in seq
+         [!seq]  matches any char not in seq
+
+    '''
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
 
@@ -92,7 +102,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     if not account_names:
         error('No configuration found for account {}'.format(account_name_pattern))
         return
-
+    info('Start configuration of: {}'.format(account_names))
     trusted_addresses = None
 
     global_cfg = config.get('global', {})
