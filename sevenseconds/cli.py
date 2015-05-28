@@ -4,6 +4,7 @@ import click
 import keyring
 import yaml
 import socket
+import os
 from sevenseconds.aws import configure_account, destroy_account, get_az_names
 
 import sevenseconds
@@ -161,7 +162,8 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
             role = matching_roles[0]
             with Action('Assuming role {}..'.format(role)):
                 key_id, secret, session_token = assume_role(saml_xml, role[0], role[1])
-            write_aws_credentials('default', key_id, secret, session_token)
+            write_aws_credentials('sevenseconds-{}'.format(account_name), key_id, secret, session_token)
+            os.environ['AWS_PROFILE'] = 'sevenseconds-{}'.format(account_name)
 
         if not trusted_addresses:
             trusted_addresses = get_trusted_addresses(config)

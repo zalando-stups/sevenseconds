@@ -153,7 +153,7 @@ def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
         info('NAT instance {} is running with Elastic IP {}'.format(az_name, ip))
 
         dns = 'nat-{}.{}.'.format(az_name, dns_domain)
-        with Action('Adding DNS record {}'.format(dns)):
+        with Action('Adding DNS record {}: {}'.format(dns, ip)):
             dns_conn = boto.route53.connect_to_region('eu-west-1')
             zone = dns_conn.get_zone(dns_domain + '.')
             rr = zone.get_records()
