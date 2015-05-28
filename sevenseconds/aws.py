@@ -232,6 +232,14 @@ def configure_dns(account_name, cfg):
             configure_dns_delegation(account_name, nameservers, cfg)
         except:
             act.error('DNS Delegation not possible')
+    soa_ttl = cfg.get('domain_soa_ttl', '60')
+    with Action('Set SOA-TTL to {}..'.format(soa_ttl)):
+        rr_zone = conn.get_zone(dns_domain + '.')
+        rr = rr_zone.get_records()
+        soa = rr_zone.find_records(dns_domain + '.', 'SOA')
+        change = rr.add_change('UPSERT', dns_domain + '.', 'SOA', ttl=soa_ttl)
+        change.add_value(soa.to_print())
+        rr.commit()
     return dns_domain
 
 
