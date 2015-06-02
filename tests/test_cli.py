@@ -24,6 +24,17 @@ def test_configure_nonexisting_account(monkeypatch):
 
     assert 'No configuration found for account myaccount' in result.output
 
+def test_configure_nonexisting_multi_account(monkeypatch):
+    runner = CliRunner()
+    config = {'accounts': {}}
+
+    with runner.isolated_filesystem():
+        with open('config.yaml', 'w') as fd:
+            yaml.safe_dump(config, fd)
+        result = runner.invoke(cli, ['configure', 'config.yaml', 'myaccount', 'dummyaccount'], catch_exceptions=False)
+
+    assert 'No configuration found for account myaccount, dummyaccount' in result.output
+
 
 def test_configure(monkeypatch):
 
@@ -56,13 +67,17 @@ def test_configure(monkeypatch):
             },
             'domain': '{account_name}.example.org'
         },
-        'accounts': {'myaccount': {}}}
+        'accounts': {
+            'myaccount': {},
+            'mystaging': {}
+            }}
 
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
             yaml.safe_dump(config, fd)
-        result = runner.invoke(cli, ['configure', 'config.yaml', 'myaccount'], catch_exceptions=False)
+        result = runner.invoke(cli, ['configure', 'config.yaml', 'my*'], catch_exceptions=False)
 
+    assert 'Start configuration of: myaccount, mystaging' in result.output
     assert 'Creating VPC for 172.31.0.0/16.. OK' in result.output
     assert 'Enabling CloudTrail.. OK' in result.output
     assert result.exit_code == 0

@@ -102,9 +102,9 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
         account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
 
     if not account_names:
-        error('No configuration found for account {}'.format(account_name_pattern))
+        error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
         return
-    info('Start configuration of: {}'.format(account_names))
+    info('Start configuration of: {}'.format(', '.join(account_names)))
     trusted_addresses = None
 
     global_cfg = config.get('global', {})
