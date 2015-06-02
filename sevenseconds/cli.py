@@ -78,7 +78,7 @@ def update_security_group(file, region_name, security_group):
 
 @cli.command()
 @click.argument('file', type=click.File('rb'))
-@click.argument('account_name_pattern')
+@click.argument('account_name_pattern', nargs=-1)
 @click.option('--saml-user', help='SAML username', envvar='SAML_USER')
 @click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
               envvar='SAML_PASSWORD')
@@ -97,8 +97,9 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     '''
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
-
-    account_names = sorted(fnmatch.filter(accounts.keys(), account_name_pattern))
+    account_names = []
+    for pattern in account_name_pattern:
+        account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
 
     if not account_names:
         error('No configuration found for account {}'.format(account_name_pattern))
