@@ -527,7 +527,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
                 raise
         rules = [
             # allow ALL connections to our internal EC2 instances
-            ('tcp', 0, 65535, '172.31.0.0/16'),
+            ('tcp', 0, 65535, VPC_NET),
             # allow HTTPS to the internet (actually only needed for SSH access service)
             ('tcp', 443, 443, '0.0.0.0/0'),
             # allow pings
