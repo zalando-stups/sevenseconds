@@ -113,8 +113,8 @@ def search_base_ami_ids(ec2_conn, cfg: dict):
 
 
 def permit_base_image(ec2_conn, cfg: dict):
-    account_id=get_account_id()
-    account_alias=get_account_alias()
+    account_id = get_account_id()
+    account_alias = get_account_alias()
     base_ami = cfg['base_ami']
     name = base_ami['name']
     with Action('Permit "{}" for "{}/{}"..'.format(name, account_id, account_alias)) as act:
@@ -692,6 +692,15 @@ def update_security_group(region_name: str, security_group: str, trusted_address
                         if 'already exists' not in e.message:
                             raise
                     act.progress()
+
+
+def get_role_ldif(cfg: dict):
+    account_alias = get_account_alias()
+    account_id = get_account_id()
+    account_name = account_alias.replace('zalando-', '')
+    return cfg['ldap']['role_template'].format(id='-'.join(['aws', account_name, account_id]),
+                                               email='aws+{}@zalando.de'.format(account_name),
+                                               alias=account_alias)
 
 
 def destroy_account(account_name, region):

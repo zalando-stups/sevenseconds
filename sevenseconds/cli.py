@@ -5,7 +5,8 @@ import keyring
 import yaml
 import socket
 import os
-from sevenseconds.aws import configure_account, destroy_account, get_az_names
+import sys
+from sevenseconds.aws import configure_account, destroy_account, get_az_names, get_role_ldif
 
 import sevenseconds
 from clickclick import AliasedGroup, error, Action, info, warning
@@ -170,6 +171,48 @@ def get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_a
         return True
 
 
+@cli.command()
+@click.argument('configuration-file', type=click.File('rb'))
+@click.argument('account_name_pattern', nargs=-1)
+@click.option('--saml-user', help='SAML username', envvar='SAML_USER')
+@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
+              envvar='SAML_PASSWORD')
+def role_ldif(configuration_file, account_name_pattern, saml_user, saml_password):
+    '''Print Role-LDIF with Template in Configuration YAML'''
+    config = yaml.safe_load(configuration_file)
+    accounts = config.get('accounts', {})
+    global_cfg = config.get('global', {})
+    saml_url = global_cfg.get('saml_identity_provider_url')
+    saml_role = global_cfg.get('saml_admin_login_role')
+    account_names = []
+    for pattern in account_name_pattern:
+        account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
+
+    if os.environ.get('AWS_PROFILE'):
+        account_names.append(os.environ.get('AWS_PROFILE'))
+
+    if not account_names:
+        print('# No Account set. Try "default"..', file=sys.stderr)
+        account_names.append('default')
+
+    print('Render LDIF for following accounts: {}'.format(', '.join(account_names)), file=sys.stderr)
+    for account_name in account_names:
+        os.environ['AWS_PROFILE'] = account_name
+        cfg = accounts.get(account_name) or {}
+        for key, val in global_cfg.items():
+            if key not in cfg:
+                cfg[key] = val
+        saml_url = cfg.get('saml_identity_provider_url')
+        saml_role = cfg.get('saml_admin_login_role')
+
+        if saml_user and saml_url and saml_role:
+            account_alias = cfg.get('alias', account_name).format(account_name=account_name)
+            aws_profile = 'sevenseconds-{}'.format(account_name)
+            if not get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_alias, aws_profile):
+                warning('Skipping account configuration of {} due to missing credentials'.format(account_name))
+                continue
+            os.environ['AWS_PROFILE'] = aws_profile
+        print(get_role_ldif(cfg))
 
 
 @cli.command()
