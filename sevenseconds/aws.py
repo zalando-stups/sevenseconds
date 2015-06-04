@@ -4,6 +4,8 @@ import time
 import yaml
 import netaddr
 import socket
+import gnupg
+import os
 from netaddr import IPNetwork
 
 from clickclick import error, Action, info, warning
@@ -83,9 +85,21 @@ def filter_subnets(subnets: list, _type: str):
 
 
 def get_base_ami_id(ec2_conn, cfg: dict):
+    images = search_base_ami_ids(ec2_conn, cfg)
+    if not images:
+        permit_base_image(ec2_conn, cfg)
+        images = search_base_ami_ids(ec2_conn, cfg)
+        if not images:
+            raise Exception('No AMI found')
+    most_recent_image = sorted(images, key=lambda i: i.name)[-1]
+    info('Most recent AMI is "{}" ({})'.format(most_recent_image.name, most_recent_image.id))
+    return most_recent_image.id
+
+
+def search_base_ami_ids(ec2_conn, cfg: dict):
     base_ami = cfg['base_ami']
     name = base_ami['name']
-    with Action('Searching for latest "{}" AMI..'.format(name)):
+    with Action('Searching for latest "{}" AMI..'.format(name)) as act:
         filters = {'name': name,
                    'is_public': str(base_ami['is_public']).lower(),
                    'state': 'available',
@@ -94,10 +108,27 @@ def get_base_ami_id(ec2_conn, cfg: dict):
             filters['owner_id'] = base_ami['owner_id']
         images = ec2_conn.get_all_images(filters=filters)
         if not images:
-            raise Exception("No AMI found for {}".format(filters))
-        most_recent_image = sorted(images, key=lambda i: i.name)[-1]
-    info('Most recent AMI is "{}" ({})'.format(most_recent_image.name, most_recent_image.id))
-    return most_recent_image.id
+            act.error('no AMI found for {}'.format(filters))
+        return images
+
+
+def permit_base_image(ec2_conn, cfg: dict):
+    account_id=get_account_id()
+    account_alias=get_account_alias()
+    base_ami = cfg['base_ami']
+    name = base_ami['name']
+    with Action('Permit "{}" for "{}/{}"..'.format(name, account_id, account_alias)) as act:
+        base_ami_ec2_conn = boto.ec2.connect_to_region(ec2_conn.region.name, profile_name='base_ami_account')
+        if base_ami_ec2_conn:
+            for image in search_base_ami_ids(base_ami_ec2_conn, cfg):
+                if image.set_launch_permissions(account_id):
+                    act.progress()
+                else:
+                    act.warning('Error on Image {}/{}'.format(image.id, image.name))
+        else:
+            act.error('No connection to "base_ami_account"')
+    with Action('Sleep 60s for AWS-Sync'):
+        time.sleep(60)
 
 
 def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
@@ -243,7 +274,7 @@ def configure_dns(account_name, cfg):
     return dns_domain
 
 
-def configure_dns_delegation(account_name, nameservers, cfg):
+def configure_dns_delegation(account_name, nameservers, cfg: dict):
     dns_conn = boto.route53.connect_to_region('eu-west-1', profile_name='adminaccount')
     account_dns_domain = cfg.get('domain').format(account_name=account_name)
     tld_dns_domain = cfg.get('domain').format(account_name='')
@@ -282,15 +313,26 @@ def configure_rds(region, subnets):
 
 def get_account_id():
     conn = boto.iam.connect_to_region('eu-west-1')
-    users = conn.get_all_users()['list_users_response']['list_users_result']['users']
-    if not users:
-        with Action('Creating temporary IAM role to determine account ID..'):
-            temp_role_name = 'temp-sevenseconds-account-id'
-            res = conn.create_role(temp_role_name)
-            arn = res['create_role_response']['create_role_result']['role']['arn']
-            conn.delete_role(temp_role_name)
+    try:
+        own_user = conn.get_user()['get_user_response']['get_user_result']['user']
+    except:
+        own_user = None
+    if not own_user:
+        roles = conn.list_roles()['list_roles_response']['list_roles_result']['roles']
+        if not roles:
+            users = conn.get_all_users()['list_users_response']['list_users_result']['users']
+            if not users:
+                with Action('Creating temporary IAM role to determine account ID..'):
+                    temp_role_name = 'temp-sevenseconds-account-id'
+                    res = conn.create_role(temp_role_name)
+                    arn = res['create_role_response']['create_role_result']['role']['arn']
+                    conn.delete_role(temp_role_name)
+            else:
+                arn = [u['arn'] for u in users][0]
+        else:
+            arn = [r['arn'] for r in roles][0]
     else:
-        arn = [u['arn'] for u in users][0]
+        arn = own_user['arn']
     account_id = arn.split(':')[4]
     return account_id
 
@@ -302,7 +344,7 @@ def get_account_alias():
 
 
 def configure_iam(account_name: str, dns_domain: str, cfg):
-    # NOTE: hardcoded region as Route53 is region-independent
+    # NOTE: hardcoded region as IAM is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
 
     roles = cfg.get('roles', {})
@@ -350,12 +392,23 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
     info('Found existing SSL certs: {}'.format(', '.join(cert_names)))
     if cert_name not in cert_names:
         with Action('Uploading SSL server certificate..'):
+            dir = os.environ.get('SSLDIR')
+            if dir and os.path.isdir(dir):
+                dir += '/'
+            else:
+                dir = ''
+            file = dir + '_.' + dns_domain
             try:
-                with open('_.' + dns_domain + '.crt') as fd:
+                with open(file + '.crt') as fd:
                     cert_body = fd.read()
-                with open('_.' + dns_domain + '.key') as fd:
-                    private_key = fd.read()
-                with open('trusted_chain.pem') as fd:
+                if os.path.isfile(file + '.key.gpg') and os.path.getsize(file + '.key.gpg') > 0:
+                    gpg = gnupg.GPG()
+                    with open(file + '.key.gpg', 'rb') as fd:
+                        private_key = gpg.decrypt_file(fd)
+                elif os.path.isfile(file + '.key') and os.path.getsize(file + '.key') > 0:
+                    with open(file + '.key') as fd:
+                        private_key = fd.read()
+                with open(dir + 'trusted_chain.pem') as fd:
                     cert_chain = fd.read()
                 conn.upload_server_cert(cert_name, cert_body=cert_body, private_key=private_key,
                                         cert_chain=cert_chain)
