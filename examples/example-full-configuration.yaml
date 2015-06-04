@@ -336,7 +336,7 @@ global:
         Statement: [{"Sid": "",
                  "Effect": "Allow",
                  # Stups account should be trusted to run read only api calls for fullstop
-                 "Principal": {"AWS": "arn:aws:iam::786011980701:root"},
+                 "Principal": {"AWS": "arn:aws:iam::123456789123:root"},
                  "Action": "sts:AssumeRole"}]
 
 accounts:

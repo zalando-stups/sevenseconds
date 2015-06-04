@@ -219,6 +219,9 @@ def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
 
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
+    if 'cloudtrail' not in cfg:
+        info('Skipping CloudTrail configuration')
+        return
     cloudtrail = boto.cloudtrail.connect_to_region(region)
     trails = cloudtrail.describe_trails()['trailList']
     name = 'Default'
