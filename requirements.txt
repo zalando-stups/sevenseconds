@@ -4,3 +4,4 @@ netaddr
 requests
 aws-saml-login>=0.9
 keyring
+python-gnupg>=0.3.7
