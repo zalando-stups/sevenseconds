@@ -1,0 +1,347 @@
+# Configuration YAML file for AWS Account Configurator
+# see https://github.com/zalando-stups/sevenseconds
+# the global section applies to all accounts
+# every key from the global section can be overridden for each account ("accounts" section)
+global:
+  # optional: admin account name which contains the root hosted zone (*.example.org)
+  admin_account: "exampleorg"
+  # account alias: prefix the account alias with the company name ("exampleorg")
+  alias: "exampleorg-{account_name}"
+  # regions to configure
+  regions:
+    - eu-central-1
+    - eu-west-1
+  # configure CloudTrail to log into company's S3 bucket
+  cloudtrail:
+    s3_bucket_name: exampleorg-cloudtrail-logs
+    s3_key_prefix: Exampleorg
+  # hosted zone for each AWS account
+  domain: "{account_name}.example.org"
+  saml_providers:
+    Shibboleth: "https://idp.example.org/shibboleth"
+  saml_identity_provider_url: "https://aws-login.example.org"
+  saml_admin_login_role: "Shibboleth-Administrator"
+  # base Taupage AMI to search for
+  base_ami:
+    name: "Taupage-AMI-*"
+    is_public: false
+    # account_id of the AMI creator
+    onwer_id: 123456789123
+  # optional: additional VPC tags
+  vpc:
+    tags:
+      Config: "{registry: pierone.stups.zalan.do, ami_id: {{ami_id}}}"
+  # optional: list of trusted IP ranges to add to security groups
+  trusted_networks:
+    exampleorg_office1: 198.51.100.0/24
+    exampleorg_dc1: 203.0.113.0/24
+  # optional: security groups to configure with trusted networks (workaround for IP based security)
+  security_groups: {}
+  # S3 buckets to configure in each AWS account
+  s3_buckets:
+    # configure Mint bucket for OAuth credentials
+    mint_bucket:
+      name: "exampleorg-stups-mint-{account_id}-{region}"
+      regions: ["eu-west-1"]
+      policy:
+        Version: "2012-10-17"
+        Statement: [
+        {
+         "Sid": "AllowMintWrite",
+         "Effect": "Allow",
+         "Principal": {
+            "AWS": "arn:aws:iam::123456789123:root"
+         },
+         "Action": [
+            "s3:PutObject"
+         ],
+         "Resource": [
+            "arn:aws:s3:::{bucket_name}/*"
+         ]
+         }]
+
+  # SSH bastion/jump host
+  bastion:
+    # uncomment the following line to terminate and redeploy "odd"
+    # re_deploy: true
+    ami_config:
+      application_id: odd
+      application_version: "0.1"
+      runtime: Docker
+      source: stups/odd:latest
+      logentries_account_key: 123-123-123-123
+      ports:
+        # use default SSH port for Docker container
+        22: 22
+      environment:
+        ALLOWED_REMOTE_NETWORKS: "172.31.0.0/16"
+        # configure your even URL here
+        GRANTING_SERVICE_URL: "https://even.stups.example.org"
+        # configure your public even SSH key here
+        GRANTING_SERVICE_SSH_KEY: "ssh-rsa AAAAB3Nza123123mysshpublickey123456789"
+      root: true
+      # use non-default SSH port for OpenSSH on host
+      ssh_ports: [2222]
+      hostname: "odd-{account_name}"
+
+  # IAM roles to configure
+  roles:
+
+    # This role is only used by the Cloud team (STUPS), especially when re-running this setup-script is required.
+    Shibboleth-Administrator:
+      policy:
+        Version: "2012-10-17"
+        Statement: [{"Action": "*", "Resource": "*", "Effect": "Allow"}]
+      assume_role_policy:
+        Version: "2012-10-17"
+        Statement: [{"Sid": "",
+                 "Effect": "Allow",
+                 "Principal": {"Federated": "arn:aws:iam::{account_id}:saml-provider/Shibboleth"},
+                 "Action": "sts:AssumeRoleWithSAML",
+                 "Condition": {"StringEquals": {"SAML:aud": "https://signin.aws.amazon.com/saml"}}}]
+
+
+    # This role grants access to all supported (*) AWS services and action in the regions Ireland and Frankfurt.
+    # The role is meant for all team members, that actually need to configure or run something in the AWS cloud.
+    #
+    # (*) supported by STUPS. Services are in general supported, when we are able to assure audit requirements.
+    Shibboleth-PowerUser:
+      policy:
+        Version: "2012-10-17"
+        Statement: [
+        {
+           # ???  Security Token Service
+           "Effect": "Allow",
+           "Action": "sts:**",
+           "Resource": "*"
+        },
+        {
+            # Deny configuring other SAML providers
+            "NotAction": [
+                "iam:CreateSAMLProvider",
+                "iam:DeleteSAMLProvider"
+            ],
+            "Effect": "Allow",
+            "Resource": "*"
+        },
+        {
+            # Deny to run EC2 instances out of Europe Regions
+            "Resource": "*",
+            "Action": "ec2:*",
+              "Condition": {
+                "StringNotLike": {
+                  "ec2:Region": [
+                  "eu-west-1",
+                  "eu-central-1"
+                  ]
+                }
+              },
+              "Effect": "Deny"
+        },
+        # Wouldn't it be better to white-list allowed services, instead of black-listing the forbidden ones ???
+        # There may be some new (untracked) services in the future, which we do not recognize immediately.
+        {
+            "Effect": "Allow",
+            "NotAction": [
+                # all services listed here are "forbidden"
+                # e.g. because they have no audit capabilities
+                "appstream:*",
+                "cognito:*",
+                "directoryservice:*",
+                "lambda:*",
+                "kinesis:*",
+                "mobileanalytics:*",
+                "ses:*",
+                "trustedadvisor:*",
+                "workmail:*",
+                "workspaces:*",
+                "zocalo:*",
+
+                # EC2 is configured above
+                "ec2:*",
+
+                # IAM is configured above
+                "iam:*"
+            ],
+            "Resource": "*"
+        },
+        {
+            "Action": [
+                "ec2:DeleteNetworkAcl",
+                "ec2:DeleteRoute",
+                "ec2:DeleteRouteTable",
+                "ec2:DeleteSubnet",
+                "ec2:DeleteVpc",
+                "ec2:DeleteVpcPeeringConnection",
+                "ec2:DeleteVpnConnection",
+                "ec2:DeleteVpnConnectionRoute",
+                "ec2:DeleteVpnGateway"
+            ],
+            "Effect": "Deny",
+            "Resource": "*"
+        }
+        ]
+      assume_role_policy:
+        Version: "2012-10-17"
+        Statement: [{"Sid": "",
+                 "Effect": "Allow",
+                 "Principal": {"Federated": "arn:aws:iam::{account_id}:saml-provider/Shibboleth"},
+                 "Action": "sts:AssumeRoleWithSAML",
+                 "Condition": {"StringEquals": {"SAML:aud": "https://signin.aws.amazon.com/saml"}}}]
+
+
+    # This role grants read-only access to all supported AWS services. It is meant for "unexperienced" team members,
+    # that should not be able to change something.
+    Shibboleth-ReadOnly:
+
+      # Can't we just use some "Managed Policies" here???
+      policy:
+        Version: "2012-10-17"
+        Statement: [{"Effect":"Allow","Resource":"*",
+          "Action":[
+            "appstream:Get*",
+            "autoscaling:Describe*",
+            "cloudformation:Describe*",
+            "cloudformation:GetTemplate",
+            "cloudformation:List*",
+            "cloudfront:Get*",
+            "cloudfront:List*",
+            "cloudtrail:DescribeTrails",
+            "cloudtrail:GetTrailStatus",
+            "cloudwatch:Describe*",
+            "cloudwatch:Get*",
+            "cloudwatch:List*",
+            "directconnect:Describe*",
+            "dynamodb:GetItem",
+            "dynamodb:BatchGetItem",
+            "dynamodb:Query",
+            "dynamodb:Scan",
+            "dynamodb:DescribeTable",
+            "dynamodb:ListTables",
+            "ec2:Describe*",
+            "elasticache:Describe*",
+            "elasticbeanstalk:Check*",
+            "elasticbeanstalk:Describe*",
+            "elasticbeanstalk:List*",
+            "elasticbeanstalk:RequestEnvironmentInfo",
+            "elasticbeanstalk:RetrieveEnvironmentInfo",
+            "elasticloadbalancing:Describe*",
+            "elastictranscoder:Read*",
+            "elastictranscoder:List*",
+            "iam:List*",
+            "iam:Get*",
+            "kinesis:Describe*",
+            "kinesis:Get*",
+            "kinesis:List*",
+            "opsworks:Describe*",
+            "opsworks:Get*",
+            "route53:Get*",
+            "route53:List*",
+            "redshift:Describe*",
+            "redshift:ViewQueriesInConsole",
+            "rds:Describe*",
+            "rds:ListTagsForResource",
+            "s3:Get*",
+            "s3:List*",
+            "sdb:GetAttributes",
+            "sdb:List*",
+            "sdb:Select*",
+            "ses:Get*",
+            "ses:List*",
+            "sns:Get*",
+            "sns:List*",
+            "sqs:GetQueueAttributes",
+            "sqs:ListQueues",
+            "sqs:ReceiveMessage",
+            "storagegateway:List*",
+            "storagegateway:Describe*",
+            "trustedadvisor:Describe*"]}]
+      assume_role_policy:
+        Version: "2012-10-17"
+        Statement: [{"Sid": "",
+                 "Effect": "Allow",
+                 "Principal": {"Federated": "arn:aws:iam::{account_id}:saml-provider/Shibboleth"},
+                 "Action": "sts:AssumeRoleWithSAML",
+                 "Condition": {"StringEquals": {"SAML:aud": "https://signin.aws.amazon.com/saml"}}}]
+
+    # special role for "fullstop." audit reporting component
+    fullstop:
+      policy:
+        Version: "2012-10-17"
+        Statement: [{"Effect":"Allow","Resource":"*",
+          "Action":[
+            "appstream:Get*",
+            "autoscaling:Describe*",
+            "cloudformation:DescribeStacks",
+            "cloudformation:DescribeStackEvents",
+            "cloudformation:DescribeStackResource",
+            "cloudformation:DescribeStackResources",
+            "cloudformation:GetTemplate",
+            "cloudformation:List*",
+            "cloudfront:Get*",
+            "cloudfront:List*",
+            "cloudtrail:DescribeTrails",
+            "cloudtrail:GetTrailStatus",
+            "cloudwatch:Describe*",
+            "cloudwatch:Get*",
+            "cloudwatch:List*",
+            "directconnect:Describe*",
+            "dynamodb:GetItem",
+            "dynamodb:BatchGetItem",
+            "dynamodb:Query",
+            "dynamodb:Scan",
+            "dynamodb:DescribeTable",
+            "dynamodb:ListTables",
+            "ec2:Describe*",
+            "elasticache:Describe*",
+            "elasticbeanstalk:Check*",
+            "elasticbeanstalk:Describe*",
+            "elasticbeanstalk:List*",
+            "elasticbeanstalk:RequestEnvironmentInfo",
+            "elasticbeanstalk:RetrieveEnvironmentInfo",
+            "elasticloadbalancing:Describe*",
+            "elasticmapreduce:Describe*",
+            "elasticmapreduce:List*",
+            "elastictranscoder:Read*",
+            "elastictranscoder:List*",
+            "iam:List*",
+            "iam:Get*",
+            "kinesis:Describe*",
+            "kinesis:Get*",
+            "kinesis:List*",
+            "opsworks:Describe*",
+            "opsworks:Get*",
+            "route53:Get*",
+            "route53:List*",
+            "redshift:Describe*",
+            "redshift:ViewQueriesInConsole",
+            "rds:Describe*",
+            "rds:ListTagsForResource",
+            "sdb:GetAttributes",
+            "sdb:List*",
+            "sdb:Select*",
+            "ses:Get*",
+            "ses:List*",
+            "sns:Get*",
+            "sns:List*",
+            "sqs:GetQueueAttributes",
+            "sqs:ListQueues",
+            "sqs:ReceiveMessage",
+            "storagegateway:List*",
+            "storagegateway:Describe*",
+            "tag:get*",
+            "trustedadvisor:Describe*"]}]
+      assume_role_policy:
+        Version: "2012-10-17"
+        Statement: [{"Sid": "",
+                 "Effect": "Allow",
+                 # Stups account should be trusted to run read only api calls for fullstop
+                 "Principal": {"AWS": "arn:aws:iam::786011980701:root"},
+                 "Action": "sts:AssumeRole"}]
+
+accounts:
+  legacy-foobar:
+    # do not overwrite legacy Frankfurt setup!
+    regions:
+      - eu-west-1
+  stups:
