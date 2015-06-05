@@ -231,7 +231,7 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
                   s3_key_prefix=cfg['cloudtrail']['s3_key_prefix'],
                   include_global_service_events=True)
     if trail:
-        with Action('Updating CloudTrail..'):
+        with Action('[{}] Updating CloudTrail..'.format(region)):
             if not dry_run:
                 cloudtrail.update_trail(**kwargs)
                 cloudtrail.start_logging(name)
@@ -239,10 +239,10 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
         if trails:
             for trail in trails:
                 name = trail.get('Name')
-                with Action('Deleting invalid trail {}..'.format(name)):
+                with Action('[{}] Deleting invalid trail {}..'.format(region, name)):
                     cloudtrail.stop_logging(name)
                     cloudtrail.delete_trail(name)
-        with Action('Enabling CloudTrail..'):
+        with Action('[{}] Enabling CloudTrail..'.format(region)):
             if not dry_run:
                 cloudtrail.create_trail(**kwargs)
                 cloudtrail.start_logging(name)
@@ -566,9 +566,10 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         return
 
     regions = cfg['regions']
+    for region in boto.regioninfo.get_regions('cloudtrail'):
+        configure_cloudtrail(account_name, region.name, cfg, dry_run)
 
     for region in regions:
-        configure_cloudtrail(account_name, region, cfg, dry_run)
 
         vpc_conn = boto.vpc.connect_to_region(region)
         ec2_conn = boto.ec2.connect_to_region(region)
