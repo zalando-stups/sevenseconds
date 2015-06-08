@@ -233,7 +233,10 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
     if trail:
         with Action('[{}] Updating CloudTrail..'.format(region)):
             if not dry_run:
-                cloudtrail.update_trail(**kwargs)
+                if (trail['IncludeGlobalServiceEvents'] != kwargs['include_global_service_events'] or
+                        trail['S3KeyPrefix'] != kwargs['s3_key_prefix'] or
+                        trail['S3BucketName'] != kwargs['s3_bucket_name']):
+                    cloudtrail.update_trail(**kwargs)
                 cloudtrail.start_logging(name)
     else:
         if trails:
@@ -565,10 +568,10 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         error('Connected to "{}", but account "{}" should be configured'.format(get_account_alias(), account_alias))
         return
 
-    regions = cfg['regions']
     for region in boto.regioninfo.get_regions('cloudtrail'):
         configure_cloudtrail(account_name, region.name, cfg, dry_run)
 
+    regions = cfg['regions']
     for region in regions:
 
         vpc_conn = boto.vpc.connect_to_region(region)
