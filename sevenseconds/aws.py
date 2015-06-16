@@ -63,12 +63,43 @@ def calculate_subnet(vpc_net: IPNetwork, _type: str, az_index: int):
 
     >>> calculate_subnet(IPNetwork('10.0.0.0/16'), 'internal', 0)
     IPNetwork('10.0.128.0/20')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/19'), 'dmz', 0)
+    IPNetwork('10.0.0.0/24')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/19'), 'dmz', 1)
+    IPNetwork('10.0.1.0/24')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/18'), 'dmz', 1)
+    IPNetwork('10.0.2.0/23')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/19'), 'internal', 0)
+    IPNetwork('10.0.16.0/23')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/19'), 'internal', 1)
+    IPNetwork('10.0.18.0/23')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/18'), 'internal', 1)
+    IPNetwork('10.0.36.0/22')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/28'), 'internal', 1)
+    IPNetwork('10.0.0.9/32')
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/30'), 'internal', 1)
+    Traceback (most recent call last):
+        ...
+    netaddr.core.AddrFormatError: invalid IPNetwork 10.0.0.2/34
+
+    >>> calculate_subnet(IPNetwork('10.0.0.0/64'), 'internal', 1)
+    Traceback (most recent call last):
+        ...
+    netaddr.core.AddrFormatError: invalid IPNetwork 10.0.0.0/64
     '''
     if _type == 'dmz':
-        networks = list(vpc_net.subnet(21))
+        networks = list(vpc_net.subnet(vpc_net.prefixlen + 5))
     else:
         # use the "upper half" of the /16 network for the internal/private subnets
-        networks = list(list(vpc_net.subnet(vpc_net.prefixlen + 1))[1].subnet(20))
+        networks = list(list(vpc_net.subnet(vpc_net.prefixlen + 1))[1].subnet(vpc_net.prefixlen + 4))
     return networks[az_index]
 
 
@@ -423,6 +454,11 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
 
 
 def substitute_template_vars(data, context: dict):
+    '''
+    >>> substitute_template_vars({'test': {'foo': {'foobar': 'dummy-{bob}'}}},
+    ...                          {'bob': 'BOB-REPLACE', 'ann': 'ANN-REPLACE'})
+    {'test': {'foo': {'foobar': 'dummy-BOB-REPLACE'}}}
+    '''
     serialized = yaml.safe_dump(data)
     data = yaml.safe_load(serialized)
     for k, v in data.items():
@@ -650,12 +686,89 @@ def configure_security_groups(cfg: dict, region, trusted_addresses):
 
 def chunks(l, n):
     """ Yield successive n-sized chunks from l.
+    >>> a = chunks('a b c d e f g h i j k l m'.split(), 2)
+    >>> a.__next__()
+    ['a', 'b']
+    >>> a.__next__()
+    ['c', 'd']
+    >>> a.__next__()
+    ['e', 'f']
+    >>> a.__next__()
+    ['g', 'h']
+    >>> a.__next__()
+    ['i', 'j']
+    >>> a.__next__()
+    ['k', 'l']
+    >>> a.__next__()
+    ['m']
+    >>> a.__next__()
+    Traceback (most recent call last):
+        ...
+    StopIteration
+    >>> a = chunks('a b c d e f g h i j k l m'.split(), 5)
+    >>> a.__next__()
+    ['a', 'b', 'c', 'd', 'e']
+    >>> a.__next__()
+    ['f', 'g', 'h', 'i', 'j']
+    >>> a.__next__()
+    ['k', 'l', 'm']
+    >>> a.__next__()
+    Traceback (most recent call last):
+        ...
+    StopIteration
     """
     for i in range(0, len(l), n):
         yield l[i:i+n]
 
 
 def consolidate_networks(networks: set, min_prefixlen: int):
+    '''
+    >>> from pprint import pprint
+    >>> test = [IPNetwork('10.47.0.0/17'),
+    ...  IPNetwork('10.47.128.0/19'),
+    ...  IPNetwork('10.47.168.0/21'),
+    ...  IPNetwork('10.47.192.0/18'),
+    ...  IPNetwork('10.48.0.0/16'),
+    ...  IPNetwork('10.28.0.0/17'),
+    ...  IPNetwork('10.28.128.0/19'),
+    ...  IPNetwork('172.16.18.205/32'),
+    ...  IPNetwork('172.16.48.0/20'),
+    ...  IPNetwork('172.16.64.0/18'),
+    ...  IPNetwork('172.16.128.0/17'),
+    ...  IPNetwork('172.20.0.0/19'),
+    ...  IPNetwork('172.20.57.229/32'),
+    ...  IPNetwork('172.20.96.0/19'),
+    ...  IPNetwork('172.20.128.0/17'),
+    ...  IPNetwork('172.21.77.0/16'),
+    ...  IPNetwork('173.124.7.8/32'),
+    ...  IPNetwork('173.124.34.0/18'),
+    ...  IPNetwork('173.93.160.0/19'),
+    ...  IPNetwork('173.93.19.241/32'),
+    ...  IPNetwork('173.93.25.95/32'),
+    ...  IPNetwork('173.154.0.0/17'),
+    ...  IPNetwork('173.154.128.0/18'),
+    ...  IPNetwork('173.154.192.0/20'),
+    ...  IPNetwork('193.99.144.85/32'),
+    ...  IPNetwork('54.239.32.138/32'),
+    ...  IPNetwork('91.240.34.5/32'),
+    ...  IPNetwork('85.183.69.83/32'),
+    ...  IPNetwork('95.100.66.202/32')]
+    >>> pprint(consolidate_networks(test, 16))
+    [IPNetwork('10.28.0.0/16'),
+     IPNetwork('10.47.0.0/16'),
+     IPNetwork('10.48.0.0/16'),
+     IPNetwork('54.239.32.138/32'),
+     IPNetwork('85.183.69.83/32'),
+     IPNetwork('91.240.34.5/32'),
+     IPNetwork('95.100.66.202/32'),
+     IPNetwork('172.16.0.0/16'),
+     IPNetwork('172.20.0.0/15'),
+     IPNetwork('173.93.16.0/20'),
+     IPNetwork('173.93.160.0/19'),
+     IPNetwork('173.124.0.0/18'),
+     IPNetwork('173.154.0.0/16'),
+     IPNetwork('193.99.144.85/32')]
+    '''
     networks = sorted([IPNetwork(net) for net in networks])
     new_networks = []
     for chunk in chunks(networks, 2):
@@ -704,9 +817,9 @@ def update_security_group(region_name: str, security_group: str, trusted_address
 def get_role_ldif(cfg: dict):
     account_alias = get_account_alias()
     account_id = get_account_id()
-    account_name = account_alias.replace('zalando-', '')
-    return cfg['ldap']['role_template'].format(id='-'.join(['aws', account_name, account_id]),
-                                               email='aws+{}@zalando.de'.format(account_name),
+    account_name = account_alias.split('-', maxsplit=1)[-1]
+    return cfg['ldap']['role_template'].format(id='-'.join([account_name, account_id]),
+                                               account_name=account_name,
                                                alias=account_alias)
 
 
