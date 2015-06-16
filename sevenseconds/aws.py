@@ -24,9 +24,9 @@ VPC_NET = IPNetwork('172.31.0.0/16')
 AZ_NAMES_BY_REGION = {}
 
 
-def find_vpc(conn):
+def find_vpc(conn, vpc_net):
     for vpc in conn.get_all_vpcs():
-        if vpc.cidr_block == str(VPC_NET):
+        if vpc.cidr_block == str(vpc_net):
             return vpc
 
 
@@ -262,13 +262,17 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
                   s3_key_prefix=cfg['cloudtrail']['s3_key_prefix'],
                   include_global_service_events=True)
     if trail:
-        with Action('[{}] Updating CloudTrail..'.format(region)):
+        with Action('[{}] Check CloudTrail..'.format(region)) as act:
             if not dry_run:
                 if (trail['IncludeGlobalServiceEvents'] != kwargs['include_global_service_events'] or
                         trail['S3KeyPrefix'] != kwargs['s3_key_prefix'] or
                         trail['S3BucketName'] != kwargs['s3_bucket_name']):
+                    act.error('wrong configuration')
                     cloudtrail.update_trail(**kwargs)
-                cloudtrail.start_logging(name)
+                status = cloudtrail.get_trail_status(name)
+                if not status['IsLogging']:
+                    act.error('was not active')
+                    cloudtrail.start_logging(name)
     else:
         if trails:
             for trail in trails:
@@ -487,7 +491,7 @@ def wait_for_ssh_port(host: str, timeout: int):
             act.progress()
 
 
-def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict):
+def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict, vpc_net: IPNetwork):
     try:
         subnet = list(filter_subnets(subnets, 'dmz'))[0]
     except:
@@ -512,89 +516,89 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
     else:
         sg = sg[0]
 
-        instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
-        re_deploy = cfg.get('re_deploy')
-        if instances and re_deploy:
-            for instance in instances:
-                with Action('Terminating SSH Bastion host for redeployment..') as act:
-                    instance.modify_attribute('DisableApiTermination', False)
-                    instance.terminate()
-                    status = instance.update()
-                    while status != 'terminated':
-                        time.sleep(5)
-                        status = instance.update()
-                        act.progress()
-            instances = None
-        if instances:
-            instance = instances[0]
-            ip = instance.ip_address
-        else:
-            with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
-                config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name})
-                user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config))
-
-                res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
-                                             instance_type=cfg.get('instance_type', 't2.micro'),
-                                             security_group_ids=[sg.id],
-                                             user_data=user_data.encode('utf-8'),
-                                             key_name=cfg.get('key_name'),
-                                             disable_api_termination=True,
-                                             monitoring_enabled=True)
-                instance = res.instances[0]
-
+    instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
+    re_deploy = cfg.get('re_deploy')
+    if instances and re_deploy:
+        for instance in instances:
+            with Action('Terminating SSH Bastion host for redeployment..') as act:
+                instance.modify_attribute('DisableApiTermination', False)
+                instance.terminate()
                 status = instance.update()
-                while status == 'pending':
+                while status != 'terminated':
                     time.sleep(5)
                     status = instance.update()
                     act.progress()
+        instances = None
+    if instances:
+        instance = instances[0]
+        ip = instance.ip_address
+    else:
+        with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
+            config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name})
+            user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config))
 
-                if status == 'running':
-                    instance.add_tag('Name', sg_name)
+            res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
+                                         instance_type=cfg.get('instance_type', 't2.micro'),
+                                         security_group_ids=[sg.id],
+                                         user_data=user_data.encode('utf-8'),
+                                         key_name=cfg.get('key_name'),
+                                         disable_api_termination=True,
+                                         monitoring_enabled=True)
+            instance = res.instances[0]
 
-            with Action('Associating Elastic IP..'):
-                addr = None
-                for _addr in ec2_conn.get_all_addresses():
-                    if not _addr.instance_id:
-                        # use existing Elastic IP (e.g. to re-use IP from previous bastion host)
-                        addr = _addr
-                if not addr:
-                    addr = ec2_conn.allocate_address('vpc')
-                addr.associate(instance.id)
-            ip = addr.public_ip
-        info('SSH Bastion instance is running with public IP {}'.format(ip))
+            status = instance.update()
+            while status == 'pending':
+                time.sleep(5)
+                status = instance.update()
+                act.progress()
+
+            if status == 'running':
+                instance.add_tag('Name', sg_name)
+
+        with Action('Associating Elastic IP..'):
+            addr = None
+            for _addr in ec2_conn.get_all_addresses():
+                if not _addr.instance_id:
+                    # use existing Elastic IP (e.g. to re-use IP from previous bastion host)
+                    addr = _addr
+            if not addr:
+                addr = ec2_conn.allocate_address('vpc')
+            addr.associate(instance.id)
+        ip = addr.public_ip
+    info('SSH Bastion instance is running with public IP {}'.format(ip))
+    try:
+        ec2_conn.revoke_security_group_egress(sg.id, -1, from_port=-1, to_port=-1, cidr_ip='0.0.0.0/0')
+    except boto.exception.EC2ResponseError as e:
+        if 'rule does not exist' not in e.message:
+            raise
+    rules = [
+        # allow ALL connections to our internal EC2 instances
+        ('tcp', 0, 65535, vpc_net),
+        # allow HTTPS to the internet (actually only needed for SSH access service)
+        ('tcp', 443, 443, '0.0.0.0/0'),
+        # allow pings
+        ('icmp', -1, -1, '0.0.0.0/0'),
+        # allow DNS
+        ('udp', 53, 53, '0.0.0.0/0'),
+        ('tcp', 53, 53, '0.0.0.0/0'),
+    ]
+    for proto, from_port, to_port, cidr in rules:
         try:
-            ec2_conn.revoke_security_group_egress(sg.id, -1, from_port=-1, to_port=-1, cidr_ip='0.0.0.0/0')
+            ec2_conn.authorize_security_group_egress(sg.id, ip_protocol=proto,
+                                                     from_port=from_port, to_port=to_port, cidr_ip=cidr)
         except boto.exception.EC2ResponseError as e:
-            if 'rule does not exist' not in e.message:
+            if 'already exists' not in e.message:
                 raise
-        rules = [
-            # allow ALL connections to our internal EC2 instances
-            ('tcp', 0, 65535, VPC_NET),
-            # allow HTTPS to the internet (actually only needed for SSH access service)
-            ('tcp', 443, 443, '0.0.0.0/0'),
-            # allow pings
-            ('icmp', -1, -1, '0.0.0.0/0'),
-            # allow DNS
-            ('udp', 53, 53, '0.0.0.0/0'),
-            ('tcp', 53, 53, '0.0.0.0/0'),
-        ]
-        for proto, from_port, to_port, cidr in rules:
-            try:
-                ec2_conn.authorize_security_group_egress(sg.id, ip_protocol=proto,
-                                                         from_port=from_port, to_port=to_port, cidr_ip=cidr)
-            except boto.exception.EC2ResponseError as e:
-                if 'already exists' not in e.message:
-                    raise
-        dns = 'odd-{}.{}.'.format(az_name[:-1], dns_domain)
-        with Action('Adding DNS record {}'.format(dns)):
-            dns_conn = boto.route53.connect_to_region('eu-west-1')
-            zone = dns_conn.get_zone(dns_domain + '.')
-            rr = zone.get_records()
-            change = rr.add_change('UPSERT', dns, 'A')
-            change.add_value(ip)
-            rr.commit()
+    dns = 'odd-{}.{}.'.format(az_name[:-1], dns_domain)
+    with Action('Adding DNS record {}'.format(dns)):
+        dns_conn = boto.route53.connect_to_region('eu-west-1')
+        zone = dns_conn.get_zone(dns_domain + '.')
+        rr = zone.get_records()
+        change = rr.add_change('UPSERT', dns, 'A')
+        change.add_value(ip)
+        rr.commit()
 
-        wait_for_ssh_port(ip, 300)
+    wait_for_ssh_port(ip, 300)
 
 
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
@@ -618,14 +622,33 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         ami_id = get_base_ami_id(ec2_conn, cfg)
 
         info('Availability zones: {}'.format(availability_zones))
+        vpc_net = VPC_NET
+        if 'vpc_net' in cfg and region in cfg['vpc_net']:
+            vpc_net = IPNetwork(cfg['vpc_net'][region]['network'])
+            info('Region with non default VPC-Network: {}'.format(vpc_net))
+            with Action('Finding existing default VPC..'):
+                vpc = find_vpc(vpc_conn, VPC_NET)
+            if vpc:
+                with Action('Deleting old default VPC..') as act:
+                    delete_vpc(vpc)
+                    try:
+                        vpc_conn.delete_vpc(vpc.id)
+                    except boto.exception.EC2ResponseError as e:
+                        if e.code == 'DependencyViolation':
+                            act.error(e.message)
+                            raise
+                        else:
+                            raise
         with Action('Finding VPC..'):
-            vpc = find_vpc(vpc_conn)
+            vpc = find_vpc(vpc_conn, vpc_net)
         if not vpc:
             error('No default VPC found')
-            with Action('Creating VPC for {cidr_block}..', cidr_block=str(VPC_NET)):
+            with Action('Creating VPC for {cidr_block}..', cidr_block=str(vpc_net)):
                 if not dry_run:
-                    vpc = vpc_conn.create_vpc(str(VPC_NET))
-        with Action('Updating VPCe..'):
+                    vpc = vpc_conn.create_vpc(str(vpc_net))
+                    igw = vpc_conn.create_internet_gateway()
+                    vpc_conn.attach_internet_gateway(igw.id, vpc.id)
+        with Action('Updating VPC..'):
             if not dry_run:
                 tags = {'Name': '{}-{}'.format(account_name, region)}
                 additional_tags = cfg.get('vpc', {}).get('tags', {})
@@ -642,7 +665,7 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
                         vpc_conn.delete_subnet(subnet.id)
         for _type in 'dmz', 'internal':
             for i, az in enumerate(sorted(availability_zones, key=lambda az: az.name)):
-                net = calculate_subnet(VPC_NET, _type, i)
+                net = calculate_subnet(vpc_net, _type, i)
                 configure_subnet(vpc_conn, vpc, az, _type, net, subnets, dry_run)
 
         # All subnets now exist
@@ -651,12 +674,109 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         configure_routing(dns_domain, vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         odd_cfg = cfg.get('bastion', {})
         odd_cfg['ami_id'] = ami_id
-        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, odd_cfg)
+        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, odd_cfg, vpc_net)
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
         configure_iam(account_name, dns_domain, cfg)
         configure_s3_buckets(account_name, cfg, region)
         configure_security_groups(cfg, region, trusted_addresses)
+
+
+def delete_vpc(vpc):
+    ''' Delete only, if the VPC use only for NAT and ODD instances
+
+    check_instances
+
+    for instance in instances
+        ModifyInstanceAttribute (Terminate-Flag löschen)
+        TerminateInstances
+        disassoiateAddress
+        releaseaddress
+
+    DetachInternetGateway
+    DeleteInternetGateway
+
+    for subnet in subnets
+        DeleteSubnet
+
+    for routetable in routertables
+        DeleteRouteTable
+
+    for securegroup in securegroups
+        for rule in securegroup.roles
+            RevokeSecurityGroupIngress
+            RevokeSecurityGroupEgress
+        DeleteSecurityGroup
+    RevokeSecurityGroupIngress
+    RevokeSecurityGroupEgress
+    DeleteSecurityGroup
+    DeleteVpc
+    '''
+    vpc_conn = vpc.connection
+    region = vpc_conn.region.name
+    ec2_conn = boto.ec2.connect_to_region(region)
+
+    instances2delete = []
+    instances2clarify = []
+    instances = ec2_conn.get_only_instances(filters={'vpc_id': vpc.id})
+    for instance in instances:
+        if (instance.tags.get('Name').startswith('NAT {}'.format(region))
+                or instance.tags.get('Name') == 'Odd (SSH Bastion Host)'):
+            instances2delete.append(instance)
+        else:
+            instances2clarify.append(instance)
+
+    if instances2clarify:
+        raise Exception('Unknown Instances ({}) found. Please delete VPC ({}) manually.'
+                        .format(', '.join(map(lambda x: '{}/{}'.format(x.id, x.tags.get('Name')),
+                                              instances2clarify)), vpc.id))
+
+    if instances2delete:
+        for instance in instances2delete:
+            info('terminate {}/{}'.format(instance.id, instance.tags.get('Name')))
+            instance.modify_attribute('disableApiTermination', 'false')
+            instance.terminate()
+
+    for instance in instances2delete:
+        status = instance.update()
+        info('instance status from {}/{}: {}'.format(instance.id, instance.tags.get('Name'), status))
+        while status == 'shutting-down':
+            time.sleep(5)
+            status = instance.update()
+            info('waiting of {}/{}, status: {}'.format(instance.id, instance.tags.get('Name'), status))
+
+    addresses = ec2_conn.get_all_addresses(filters={'domain': 'vpc'})
+    for addr in addresses:
+        try:
+            addr.release()
+        except boto.exception.EC2ResponseError as e:
+            info(e.message)
+
+    igw = vpc_conn.get_all_internet_gateways(filters={'attachment.vpc-id': vpc.id})
+    if igw:
+        vpc_conn.detach_internet_gateway(igw[0].id, vpc.id)
+        vpc_conn.delete_internet_gateway(igw[0].id)
+
+    subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
+    if subnets:
+        for subnet in subnets:
+            vpc_conn.delete_subnet(subnet.id)
+
+    route_tables = vpc_conn.get_all_route_tables(filters={'vpc-id': vpc.id})
+    if route_tables:
+        for route_table in route_tables:
+            try:
+                vpc_conn.delete_route_table(route_table.id)
+            except boto.exception.EC2ResponseError as e:
+                info(e.message)
+
+    security_groups = vpc_conn.get_all_security_groups(filters={'vpc-id': vpc.id})
+    if security_groups:
+        for security_group in security_groups:
+            try:
+                vpc_conn.delete_security_group(group_id=security_group.id)
+            except boto.exception.EC2ResponseError as e:
+                info(e.message)
 
 
 def configure_s3_buckets(account_name: str, cfg: dict, region):
