@@ -10,6 +10,7 @@ Amazon doesn't support it yet via API. Feature Request is ongoing...
 example code (possibly not runnable)
 
 .. code-block:: python
+
     #!/usr/bin/python3
 
     import boto.iam
@@ -44,6 +45,7 @@ example code (possibly not runnable)
                 con.enable_mfa_device(user_name='root', serial_number=mfa['create_virtual_mfa_device_response']['create_virtual_mfa_device_result']['virtual_mfa_device']['serial_number'], auth_code_1=id1, auth_code_2=id2)
         else:
             act.warning('Skipping (root-account)')
+
 
 Other nice Feature currently without API-Support
 ================================================
