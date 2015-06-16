@@ -171,7 +171,7 @@ def get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_a
         return True
 
 
-@cli.command()
+@cli.command('role-ldif')
 @click.argument('configuration-file', type=click.File('rb'))
 @click.argument('account_name_pattern', nargs=-1)
 @click.option('--saml-user', help='SAML username', envvar='SAML_USER')
