@@ -9,7 +9,7 @@ Amazon doesn't support it yet via API. Feature Request is ongoing...
 
 example code (possibly not runnable)
 
-```
+```python
 #!/usr/bin/python3
 
 import boto.iam
