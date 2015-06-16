@@ -38,7 +38,7 @@ EMAIL = 'henning.jacobs@zalando.de'
 
 COVERAGE_XML = True
 COVERAGE_HTML = False
-JUNIT_XML = True
+JUNIT_XML = False
 
 # Add here all kinds of additional classifiers as defined under
 # https://pypi.python.org/pypi?%3Aaction=list_classifiers
