@@ -636,9 +636,7 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
                     except boto.exception.EC2ResponseError as e:
                         if e.code == 'DependencyViolation':
                             act.error(e.message)
-                            raise
-                        else:
-                            raise
+                        raise Exception('{}! Please delete VPC ({}) manually.'.format(e.code, vpc.id))
         with Action('Finding VPC..'):
             vpc = find_vpc(vpc_conn, vpc_net)
         if not vpc:
@@ -760,7 +758,10 @@ def delete_vpc(vpc):
     subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
     if subnets:
         for subnet in subnets:
-            vpc_conn.delete_subnet(subnet.id)
+            try:
+                vpc_conn.delete_subnet(subnet.id)
+            except boto.exception.EC2ResponseError as e:
+                info(e.message)
 
     route_tables = vpc_conn.get_all_route_tables(filters={'vpc-id': vpc.id})
     if route_tables:
