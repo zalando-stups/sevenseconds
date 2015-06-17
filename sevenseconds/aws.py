@@ -534,7 +534,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
         ip = instance.ip_address
     else:
         with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
-            config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name})
+            config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name, 'vpc_net': str(vpc_net)})
             user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config))
 
             res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
@@ -713,6 +713,7 @@ def delete_vpc(vpc):
     vpc_conn = vpc.connection
     region = vpc_conn.region.name
     ec2_conn = boto.ec2.connect_to_region(region)
+    rds2_conn = boto.rds2.connect_to_region(region)
 
     instances2delete = []
     instances2clarify = []
@@ -762,6 +763,10 @@ def delete_vpc(vpc):
                 vpc_conn.delete_subnet(subnet.id)
             except boto.exception.EC2ResponseError as e:
                 info(e.message)
+    try:
+        rds2_conn.delete_db_subnet_group('internal')
+    except boto.exception.EC2ResponseError as e:
+        info(e.message)
 
     route_tables = vpc_conn.get_all_route_tables(filters={'vpc-id': vpc.id})
     if route_tables:
