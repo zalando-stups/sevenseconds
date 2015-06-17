@@ -534,7 +534,8 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
         ip = instance.ip_address
     else:
         with Action('Launching SSH Bastion instance in {az_name}..', az_name=az_name) as act:
-            config = substitute_template_vars(cfg.get('ami_config'), {'account_name': account_name, 'vpc_net': str(vpc_net)})
+            config = substitute_template_vars(cfg.get('ami_config'),
+                                              {'account_name': account_name, 'vpc_net': str(vpc_net)})
             user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config))
 
             res = ec2_conn.run_instances(cfg.get('ami_id'), subnet_id=subnet.id,
