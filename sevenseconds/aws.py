@@ -432,7 +432,7 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
     cert_names = [d['server_certificate_name'] for d in certs]
     info('Found existing SSL certs: {}'.format(', '.join(cert_names)))
     if cert_name not in cert_names:
-        with Action('Uploading SSL server certificate..'):
+        with Action('Uploading SSL server certificate..') as act:
             dir = os.environ.get('SSLDIR')
             if dir and os.path.isdir(dir):
                 dir += '/'
@@ -454,7 +454,7 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
                 conn.upload_server_cert(cert_name, cert_body=cert_body, private_key=private_key,
                                         cert_chain=cert_chain)
             except FileNotFoundError as e:
-                warning('Could not upload SSL cert: {}'.format(e))
+                act.error('Could not upload SSL cert: {}'.format(e))
 
 
 def substitute_template_vars(data, context: dict):
