@@ -3,7 +3,7 @@ coverage.xml
 junit.xml
 .coverage
 .idea
-*.swp
+*.sw*
 __pycache__
 dist/
 *.crt
