@@ -612,6 +612,8 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
     for region in boto.regioninfo.get_regions('cloudtrail'):
         configure_cloudtrail(account_name, region.name, cfg, dry_run)
 
+    dns_domain = configure_dns(account_name, cfg)
+    configure_iam(account_name, dns_domain, cfg)
     regions = cfg['regions']
     for region in regions:
 
@@ -669,14 +671,12 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
 
         # All subnets now exist
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
-        dns_domain = configure_dns(account_name, cfg)
         configure_routing(dns_domain, vpc_conn, ec2_conn, subnets, cfg.get('nat', {}))
         odd_cfg = cfg.get('bastion', {})
         odd_cfg['ami_id'] = ami_id
         configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, odd_cfg, vpc_net)
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
-        configure_iam(account_name, dns_domain, cfg)
         configure_s3_buckets(account_name, cfg, region)
         configure_security_groups(cfg, region, trusted_addresses)
 
