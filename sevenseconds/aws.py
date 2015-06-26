@@ -6,6 +6,7 @@ import netaddr
 import socket
 import gnupg
 import os
+import urllib.parse
 from netaddr import IPNetwork
 
 from clickclick import error, Action, info, warning
@@ -18,6 +19,7 @@ import boto.rds2
 import boto.iam
 import boto.ec2.autoscale
 import boto.s3
+import boto3
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
@@ -387,6 +389,7 @@ def get_account_alias():
 def configure_iam(account_name: str, dns_domain: str, cfg):
     # NOTE: hardcoded region as IAM is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
+    iam = boto3.resource('iam')
 
     roles = cfg.get('roles', {})
 
@@ -395,6 +398,21 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
     info('Account ID is {}'.format(account_id))
 
     for role_name, role_cfg in sorted(roles.items()):
+        with Action('Checking role {role_name}..', **vars()) as act:
+            try:
+                res = conn.get_role_policy(role_name, role_name)['get_role_policy_response']['get_role_policy_result']
+                current_policy = json.loads(urllib.parse.unquote(res['policy_document']))
+                approved_policy = role_cfg['policy']
+                res = conn.list_role_policies(role_name)
+                policy_names = res['list_role_policies_response']['list_role_policies_result']['policy_names']
+                if (current_policy == approved_policy
+                   and len(policy_names) == 1
+                   and len(list(iam.Role(role_name).attached_policies.all())) == 0):
+                    continue
+                else:
+                    act.error('missmatch')
+            except:
+                act.error('Failed')
         try:
             conn.get_role(role_name)
         except:
@@ -408,7 +426,11 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
             policy_names = res['list_role_policies_response']['list_role_policies_result']['policy_names']
             for policy_name in policy_names:
                 if policy_name != role_name:
+                    warning('Delete {} from {}'.format(policy_name, role_name))
                     conn.delete_role_policy(role_name, policy_name)
+            for policy in iam.Role(role_name).attached_policies.all():
+                warning('Detach {} from {}'.format(policy.policy_name, role_name))
+                policy.detach_role(RoleName=role_name)
 
     res = conn.list_saml_providers()['list_saml_providers_response']['list_saml_providers_result']
     saml_providers = res['saml_provider_list']
