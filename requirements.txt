@@ -1,5 +1,6 @@
 clickclick>=0.9
 boto>=2.38.0
+boto3>=1.0.1
 netaddr
 requests
 aws-saml-login>=0.9
