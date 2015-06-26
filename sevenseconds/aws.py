@@ -8,6 +8,8 @@ import gnupg
 import os
 import urllib.parse
 from netaddr import IPNetwork
+import dateutil.parser
+import datetime
 
 from clickclick import error, Action, info, warning
 import boto.cloudtrail
@@ -505,10 +507,10 @@ def wait_for_ssh_port(host: str, timeout: int):
             except:
                 result = -1
             if result == 0:
-                break
+                return True
             if time.time() - start > timeout:
                 act.error('TIMEOUT')
-                break
+                return False
             time.sleep(5)
             act.progress()
 
@@ -542,14 +544,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
     re_deploy = cfg.get('re_deploy')
     if instances and re_deploy:
         for instance in instances:
-            with Action('Terminating SSH Bastion host for redeployment..') as act:
-                instance.modify_attribute('DisableApiTermination', False)
-                instance.terminate()
-                status = instance.update()
-                while status != 'terminated':
-                    time.sleep(5)
-                    status = instance.update()
-                    act.progress()
+            drop_bastionhost(instance)
         instances = None
     if instances:
         instance = instances[0]
@@ -621,7 +616,23 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
         change.add_value(ip)
         rr.commit()
 
-    wait_for_ssh_port(ip, 60)
+    launch_time = dateutil.parser.parse(instance.launch_time)
+    if (not wait_for_ssh_port(ip, 60)
+            and datetime.timedelta(hours=1) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
+        error('Bastion Host does not response. Drop Bastionhost and create new one')
+        drop_bastionhost(instance)
+        configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, cfg, vpc_net)
+
+
+def drop_bastionhost(instance):
+    with Action('Terminating SSH Bastion host for redeployment..') as act:
+        instance.modify_attribute('DisableApiTermination', False)
+        instance.terminate()
+        status = instance.update()
+        while status != 'terminated':
+            time.sleep(5)
+            status = instance.update()
+            act.progress()
 
 
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
