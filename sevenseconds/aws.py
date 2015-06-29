@@ -53,9 +53,9 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
 def get_az_names(region: str):
     names = AZ_NAMES_BY_REGION.get(region)
     if not names:
-        conn = boto.ec2.connect_to_region(region)
-        ec2_zones = conn.get_all_zones(filters={'state': 'available'})
-        names = [z.name for z in ec2_zones]
+        conn = boto3.client('ec2', region)
+        ec2_zones = conn.describe_availability_zones(Filters=[{'Name': 'state', 'Values': ['available']}])
+        names = [z['ZoneName'] for z in ec2_zones['AvailabilityZones']]
         AZ_NAMES_BY_REGION[region] = names
     return names
 
