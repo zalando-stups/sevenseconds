@@ -1,6 +1,6 @@
 import pytest
 from mock import MagicMock
-from sevenseconds.aws import get_account_id
+from sevenseconds.aws import get_account_id, get_az_names
 from datetime import datetime
 import botocore.exceptions
 
@@ -102,6 +102,36 @@ def test_get_account_id(monkeypatch):
     monkeypatch.setattr('boto3.client', lambda x: conn)
     id = get_account_id()
     assert id == '01234567', 'ID from temporay Role'
+
+
+def test_get_az_names(monkeypatch):
+    conn = MagicMock(describe_availability_zones=lambda **kargs: {
+        'AvailabilityZones': [
+            {
+                'ZoneName': 'eu-west-1a',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }, {
+                'ZoneName': 'eu-west-1b',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }, {
+                'ZoneName': 'eu-west-1c',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }]})
+    monkeypatch.setattr('boto3.client', lambda x: conn)
+    names = get_az_names('eu-west-1')
+    assert 'eu-west-1b' in names, 'AZ found'
+
+    conn = MagicMock(describe_availability_zones=lambda **kargs: {
+        'AvailabilityZones': []})
+    monkeypatch.setattr('boto3.client', lambda x: conn)
+    names = get_az_names('eu-west-1')
+    assert 'eu-west-1b' in names, 'AZ found from Cache'
 
 
 if __name__ == '__main__':
