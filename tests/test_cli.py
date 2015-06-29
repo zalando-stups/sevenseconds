@@ -1,7 +1,8 @@
 import pytest
 from click.testing import CliRunner
 from mock import MagicMock
-from sevenseconds.cli import *
+from sevenseconds.cli import cli, yaml
+
 
 def test_print_version():
     runner = CliRunner()
@@ -24,6 +25,7 @@ def test_configure_nonexisting_account(monkeypatch):
 
     assert 'No configuration found for account myaccount' in result.output
 
+
 def test_configure_nonexisting_multi_account(monkeypatch):
     runner = CliRunner()
     config = {'accounts': {}}
@@ -40,7 +42,7 @@ def test_configure(monkeypatch):
 
     iam_conn = MagicMock(get_account_alias=lambda: {'list_account_aliases_response':
                                                     {'list_account_aliases_result':
-                                                         {'account_aliases': ['myaccount']}}})
+                                                     {'account_aliases': ['myaccount']}}})
 
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.ec2.connect_to_region', MagicMock())
@@ -81,3 +83,7 @@ def test_configure(monkeypatch):
     assert 'Creating VPC for 172.31.0.0/16.. OK' in result.output
     assert 'Enabling CloudTrail.. OK' in result.output
     assert result.exit_code == 0
+
+
+if __name__ == '__main__':
+    pytest.main()

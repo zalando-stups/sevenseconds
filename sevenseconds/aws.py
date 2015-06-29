@@ -357,27 +357,30 @@ def configure_rds(region, subnets):
 
 
 def get_account_id():
-    conn = boto.iam.connect_to_region('eu-west-1')
+    conn = boto3.client('iam')
     try:
-        own_user = conn.get_user()['get_user_response']['get_user_result']['user']
+        own_user = conn.get_user()['User']
     except:
         own_user = None
     if not own_user:
-        roles = conn.list_roles()['list_roles_response']['list_roles_result']['roles']
+        roles = conn.list_roles()['Roles']
         if not roles:
-            users = conn.get_all_users()['list_users_response']['list_users_result']['users']
+            users = conn.list_users()['Users']
             if not users:
                 with Action('Creating temporary IAM role to determine account ID..'):
                     temp_role_name = 'temp-sevenseconds-account-id'
-                    res = conn.create_role(temp_role_name)
-                    arn = res['create_role_response']['create_role_result']['role']['arn']
-                    conn.delete_role(temp_role_name)
+                    temp_policy = '''{'Statement': [{'Action': ['sts:AssumeRole'],
+                                                  'Effect': 'Allow',
+                                                  'Principal': {'Service': ['ec2.amazonaws.com']}}]}'''
+                    res = conn.create_role(RoleName=temp_role_name, AssumeRolePolicyDocument=temp_policy)
+                    arn = res['Role']['Arn']
+                    conn.delete_role(RoleName=temp_role_name)
             else:
-                arn = [u['arn'] for u in users][0]
+                arn = [u['Arn'] for u in users][0]
         else:
-            arn = [r['arn'] for r in roles][0]
+            arn = [r['Arn'] for r in roles][0]
     else:
-        arn = own_user['arn']
+        arn = own_user['Arn']
     account_id = arn.split(':')[4]
     return account_id
 
