@@ -44,6 +44,7 @@ def test_configure(monkeypatch):
                                                     {'list_account_aliases_result':
                                                      {'account_aliases': ['myaccount']}}})
 
+    monkeypatch.setattr('boto3.client', MagicMock())
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.ec2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.cloudtrail.connect_to_region', MagicMock())
