@@ -129,7 +129,7 @@ def test_get_az_names(monkeypatch):
 
     conn = MagicMock(describe_availability_zones=lambda **kargs: {
         'AvailabilityZones': []})
-    monkeypatch.setattr('boto3.client', lambda x: conn)
+    monkeypatch.setattr('boto3.client', lambda x, y: conn)
     names = get_az_names('eu-west-1')
     assert 'eu-west-1b' in names, 'AZ found from Cache'
 
