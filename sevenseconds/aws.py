@@ -255,39 +255,40 @@ def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
 
 def configure_cloudtrail(account_name, region, cfg, dry_run):
     if 'cloudtrail' not in cfg:
-        info('Skipping CloudTrail configuration')
+        info('Found no Cloudtrail Section in Configfile. Skipping CloudTrail configuration')
         return
-    cloudtrail = boto.cloudtrail.connect_to_region(region)
+    cloudtrail = boto3.client('cloudtrail', region)
     trails = cloudtrail.describe_trails()['trailList']
     name = 'Default'
     trail = find_trail(trails, name)
-    kwargs = dict(name=name,
-                  s3_bucket_name=cfg['cloudtrail']['s3_bucket_name'],
-                  s3_key_prefix=cfg['cloudtrail']['s3_key_prefix'],
-                  include_global_service_events=True)
+    kwargs = dict(Name=name,
+                  S3BucketName=cfg['cloudtrail']['s3_bucket_name'],
+                  S3KeyPrefix=cfg['cloudtrail']['s3_key_prefix'],
+                  IncludeGlobalServiceEvents=True)
     if trail:
         with Action('[{}] Check CloudTrail..'.format(region)) as act:
             if not dry_run:
-                if (trail['IncludeGlobalServiceEvents'] != kwargs['include_global_service_events'] or
-                        trail['S3KeyPrefix'] != kwargs['s3_key_prefix'] or
-                        trail['S3BucketName'] != kwargs['s3_bucket_name']):
+                if (trail['IncludeGlobalServiceEvents'] != kwargs['IncludeGlobalServiceEvents'] or
+                        trail['S3KeyPrefix'] != kwargs['S3KeyPrefix'] or
+                        trail['S3BucketName'] != kwargs['S3BucketName']):
                     act.error('wrong configuration')
                     cloudtrail.update_trail(**kwargs)
-                status = cloudtrail.get_trail_status(name)
+                status = cloudtrail.get_trail_status(Name=name)
                 if not status['IsLogging']:
                     act.error('was not active')
-                    cloudtrail.start_logging(name)
+                    cloudtrail.start_logging(Name=name)
     else:
         if trails:
             for trail in trails:
                 delname = trail.get('Name')
                 with Action('[{}] Deleting invalid trail {}..'.format(region, delname)):
-                    cloudtrail.stop_logging(delname)
-                    cloudtrail.delete_trail(delname)
+                    if not dry_run:
+                        cloudtrail.stop_logging(Name=delname)
+                        cloudtrail.delete_trail(Name=delname)
         with Action('[{}] Enabling CloudTrail..'.format(region)):
             if not dry_run:
                 cloudtrail.create_trail(**kwargs)
-                cloudtrail.start_logging(name)
+                cloudtrail.start_logging(Name=name)
 
 
 def configure_dns(account_name, cfg):
