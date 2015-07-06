@@ -476,13 +476,18 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
             try:
                 with open(file + '.crt') as fd:
                     cert_body = fd.read()
-                if os.path.isfile(file + '.key.gpg') and os.path.getsize(file + '.key.gpg') > 0:
-                    gpg = gnupg.GPG()
-                    with open(file + '.key.gpg', 'rb') as fd:
-                        private_key = gpg.decrypt_file(fd)
-                elif os.path.isfile(file + '.key') and os.path.getsize(file + '.key') > 0:
+                if os.path.isfile(file + '.key') and os.path.getsize(file + '.key') > 0:
                     with open(file + '.key') as fd:
                         private_key = fd.read()
+                elif os.path.isfile(file + '.key.gpg') and os.path.getsize(file + '.key.gpg') > 0:
+                    gpg = gnupg.GPG()
+                    with open(file + '.key.gpg', 'rb') as fd:
+                        gpg_obj = gpg.decrypt_file(fd)
+                    if gpg_obj.ok:
+                        private_key = gpg_obj.data
+                    else:
+                        act.error('decryption error: {}'.format(gpg_obj.stderr))
+                        return
                 with open(dir + 'trusted_chain.pem') as fd:
                     cert_chain = fd.read()
                 conn.upload_server_cert(cert_name, cert_body=cert_body, private_key=private_key,
