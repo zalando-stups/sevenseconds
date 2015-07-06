@@ -295,14 +295,15 @@ def configure_dns(account_name, cfg):
     dns_domain = cfg.get('domain').format(account_name=account_name)
 
     # NOTE: hardcoded region as Route53 is region-independent
-    conn = boto.route53.connect_to_region('eu-west-1')
-    zone = conn.get_hosted_zone_by_name(dns_domain + '.')
+    conn = boto3.client('route53')
+    zone = conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones']
     if not zone:
         with Action('Creating hosted zone..'):
-            conn.create_zone(dns_domain + '.', private_zone=False)
-    zone = conn.get_hosted_zone_by_name(dns_domain + '.')
-    zone = zone['GetHostedZoneResponse']
-    nameservers = zone['DelegationSet']['NameServers']
+            conn.create_hosted_zone(Name=dns_domain + '.',
+                                    CallerReferenc='sevenseconds-' + dns_domain,
+                                    HostedZoneConfig={'PrivateZone': False})
+    zone = conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones'][0]
+    nameservers = conn.get_hosted_zone(Id=zone['Id'])['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
     with Action('Set up DNS Delegation..') as act:
         try:
@@ -311,12 +312,17 @@ def configure_dns(account_name, cfg):
             act.error('DNS Delegation not possible')
     soa_ttl = cfg.get('domain_soa_ttl', '60')
     with Action('Set SOA-TTL to {}..'.format(soa_ttl)):
-        rr_zone = conn.get_zone(dns_domain + '.')
-        rr = rr_zone.get_records()
-        soa = rr_zone.find_records(dns_domain + '.', 'SOA')
-        change = rr.add_change('UPSERT', dns_domain + '.', 'SOA', ttl=soa_ttl)
-        change.add_value(soa.to_print())
-        rr.commit()
+        rr_list = conn.list_resource_record_sets(HostedZoneId=zone['Id'],
+                                                 StartRecordType='SOA',
+                                                 StartRecordName=zone['Name'])
+        rr = rr_list['ResourceRecordSets'][0]['ResourceRecords']
+        changebatch = {'Comment': 'updated SOA TTL',
+                       'Changes': [{'Action': 'UPSERT',
+                                    'ResourceRecordSet': {'Name': zone['Name'],
+                                                          'Type': 'SOA',
+                                                          'TTL': int(soa_ttl),
+                                                          'ResourceRecords':rr}}]}
+        conn.change_resource_record_sets(HostedZoneId=zone['Id'], ChangeBatch=changebatch)
     return dns_domain
 
 
