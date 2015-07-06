@@ -47,6 +47,8 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
         with Action('Creating subnet {name} with {net}..', **vars()):
             if not dry_run:
                 subnet = vpc_conn.create_subnet(vpc.id, str(net), availability_zone=az.name)
+                # We are to fast for AWS (InvalidSubnetID.NotFound)
+                time.sleep(2)
                 subnet.add_tags({'Name': name})
 
 
@@ -176,6 +178,8 @@ def configure_routing(dns_domain, vpc_conn, ec2_conn, subnets: list, cfg: dict):
         if not sg:
             sg = ec2_conn.create_security_group(sg_name, 'Allow internet access through NAT instances',
                                                 vpc_id=subnet.vpc_id)
+            # We are to fast for AWS (InvalidGroup.NotFound)
+            time.sleep(2)
             sg.add_tags({'Name': sg_name})
 
             internal_subnet = [sn for sn in filter_subnets(subnets, 'internal') if sn.availability_zone == az_name][0]
@@ -542,6 +546,8 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
     if not sg:
         sg = ec2_conn.create_security_group(sg_name, 'Allow SSH access to the bastion host',
                                             vpc_id=subnet.vpc_id)
+        # We are to fast for AWS (InvalidGroup.NotFound)
+        time.sleep(2)
         sg.add_tags({'Name': sg_name})
 
         sg.authorize(ip_protocol='tcp',
@@ -651,6 +657,8 @@ def drop_bastionhost(instance):
 
 
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
+    # Remove Default-Session for new loop
+    boto3.DEFAULT_SESSION = None
     account_alias = cfg.get('alias', account_name).format(account_name=account_name)
 
     if account_alias != get_account_alias():
