@@ -670,6 +670,7 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
 
     dns_domain = configure_dns(account_name, cfg)
     configure_iam(account_name, dns_domain, cfg)
+    configure_s3_buckets(account_name, cfg)
     regions = cfg['regions']
     for region in regions:
 
@@ -733,7 +734,6 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
         configure_bastion_host(account_name, dns_domain, ec2_conn, subnets, odd_cfg, vpc_net)
         configure_elasticache(region, subnets)
         configure_rds(region, subnets)
-        configure_s3_buckets(account_name, cfg, region)
         configure_security_groups(cfg, region, trusted_addresses)
 
 
@@ -842,13 +842,13 @@ def delete_vpc(vpc):
                 info(e.message)
 
 
-def configure_s3_buckets(account_name: str, cfg: dict, region):
-    s3 = boto.s3.connect_to_region(region)
+def configure_s3_buckets(account_name: str, cfg: dict):
     account_id = get_account_id()
     for _, config in cfg.get('s3_buckets', {}).items():
-        bucket_name = config['name']
-        bucket_name = bucket_name.replace('{account_id}', account_id).replace('{region}', region)
-        if region in config.get('regions', []):
+        for region in config.get('regions', []):
+            bucket_name = config['name']
+            bucket_name = bucket_name.replace('{account_id}', account_id).replace('{region}', region)
+            s3 = boto.s3.connect_to_region(region)
             with Action('Checking S3 bucket {}..'.format(bucket_name)):
                 bucket = s3.lookup(bucket_name)
             if not bucket:
