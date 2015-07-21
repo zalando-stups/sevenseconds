@@ -1,6 +1,6 @@
 import pytest
 from click.testing import CliRunner
-from mock import MagicMock
+from unittest.mock import MagicMock
 from sevenseconds.cli import cli, yaml
 
 

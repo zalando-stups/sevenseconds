@@ -1,5 +1,5 @@
 import pytest
-from mock import MagicMock
+from unittest.mock import MagicMock
 from sevenseconds.aws import get_account_id, get_az_names, configure_cloudtrail
 from datetime import datetime
 import botocore.exceptions
