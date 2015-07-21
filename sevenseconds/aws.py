@@ -304,8 +304,8 @@ def configure_dns(account_name, cfg):
     if not zone:
         with Action('Creating hosted zone..'):
             conn.create_hosted_zone(Name=dns_domain + '.',
-                                    CallerReferenc='sevenseconds-' + dns_domain,
-                                    HostedZoneConfig={'PrivateZone': False})
+                                    CallerReference='sevenseconds-' + dns_domain,
+                                    HostedZoneConfig={'Comment': 'Public Hosted Zone'})
     zone = conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones'][0]
     nameservers = conn.get_hosted_zone(Id=zone['Id'])['DelegationSet']['NameServers']
     info('Hosted zone for {} has nameservers {}'.format(dns_domain, nameservers))
@@ -313,7 +313,7 @@ def configure_dns(account_name, cfg):
         try:
             configure_dns_delegation(account_name, nameservers, cfg)
         except:
-            act.error('DNS Delegation not possible')
+           act.error('DNS Delegation not possible')
     soa_ttl = cfg.get('domain_soa_ttl', '60')
     with Action('Set SOA-TTL to {}..'.format(soa_ttl)):
         rr_list = conn.list_resource_record_sets(HostedZoneId=zone['Id'],
