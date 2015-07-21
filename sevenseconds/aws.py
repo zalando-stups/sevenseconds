@@ -313,8 +313,8 @@ def configure_dns(account_name, cfg):
         try:
             configure_dns_delegation(account_name, nameservers, cfg)
         except:
-           act.error('DNS Delegation not possible')
-           soa_ttl = cfg.get('domain_soa_ttl', '60')
+            act.error('DNS Delegation not possible')
+    soa_ttl = cfg.get('domain_soa_ttl', '60')
     with Action('Set SOA-TTL to {}..'.format(soa_ttl)):
         rr_list = conn.list_resource_record_sets(HostedZoneId=zone['Id'],
                                                  StartRecordType='SOA',
