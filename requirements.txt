@@ -8,3 +8,4 @@ keyring
 python-gnupg>=0.3.7
 python-dateutil
 datetime
+PyYAML
