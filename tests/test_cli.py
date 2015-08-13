@@ -44,7 +44,26 @@ def test_configure(monkeypatch):
                                                     {'list_account_aliases_result':
                                                      {'account_aliases': ['myaccount']}}})
 
-    monkeypatch.setattr('boto3.client', MagicMock())
+    myboto3 = MagicMock(list_account_aliases=lambda *args, **vargs: {'AccountAliases': ['myaccount']},
+                        describe_availability_zones=lambda *args, **vargs: {
+        'AvailabilityZones': [
+            {
+                'ZoneName': 'eu-west-1a',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }, {
+                'ZoneName': 'eu-west-1b',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }, {
+                'ZoneName': 'eu-west-1c',
+                'RegionName': 'eu-west-1',
+                'State': 'available',
+                'Messages': []
+            }]})
+    monkeypatch.setattr('boto3.client', lambda *args: myboto3)
     monkeypatch.setattr('boto.vpc.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.ec2.connect_to_region', MagicMock())
     monkeypatch.setattr('boto.cloudtrail.connect_to_region', MagicMock())

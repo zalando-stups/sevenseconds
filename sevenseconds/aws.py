@@ -397,9 +397,8 @@ def get_account_id():
 
 
 def get_account_alias():
-    conn = boto.iam.connect_to_region('eu-west-1')
-    resp = conn.get_account_alias()
-    return resp['list_account_aliases_response']['list_account_aliases_result']['account_aliases'][0]
+    conn = boto3.client('iam')
+    return conn.list_account_aliases()['AccountAliases'][0]
 
 
 def configure_iam(account_name: str, dns_domain: str, cfg):
