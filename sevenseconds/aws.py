@@ -300,7 +300,8 @@ def configure_dns(account_name, cfg):
 
     # NOTE: hardcoded region as Route53 is region-independent
     conn = boto3.client('route53')
-    zone = conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones']
+    zone = list(filter(lambda x: x['Name'] == dns_domain + '.',
+                       conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones']))
     if not zone:
         with Action('Creating hosted zone..'):
             conn.create_hosted_zone(Name=dns_domain + '.',
