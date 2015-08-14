@@ -656,10 +656,29 @@ def drop_bastionhost(instance):
             act.progress()
 
 
+def configure_log_group(region):
+    client = boto3.client('logs', region)
+    logs = client.describe_log_groups(logGroupNamePrefix='vpc-flowgroup')['logGroups']
+    for log in logs:
+        if log.get('logGroupName', '') == 'vpc-flowgroup':
+            return
+    client.create_log_group(logGroupName='vpc-flowgroup')
+
+
+def exist_flowlog(region, vpc_id):
+    client = boto3.client('ec2', region)
+    for flowlog in client.describe_flow_logs()['FlowLogs']:
+        if (flowlog['LogGroupName'] == 'vpc-flowgroup' and
+                flowlog['ResourceId'] == vpc_id):
+            return True
+    return False
+
+
 def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_run: bool=False):
     # Remove Default-Session for new loop
     boto3.DEFAULT_SESSION = None
     account_alias = cfg.get('alias', account_name).format(account_name=account_name)
+    account_id = get_account_id()
 
     if account_alias != get_account_alias():
         error('Connected to "{}", but account "{}" should be configured'.format(get_account_alias(), account_alias))
@@ -676,12 +695,14 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
 
         vpc_conn = boto.vpc.connect_to_region(region)
         ec2_conn = boto.ec2.connect_to_region(region)
+        ec2 = boto3.client('ec2', region)
         with Action('Checking region {region}..', **vars()):
             availability_zones = ec2_conn.get_all_zones()
+        info('Availability zones: {}'.format(availability_zones))
 
         ami_id = get_base_ami_id(ec2_conn, cfg)
+        configure_log_group(region)
 
-        info('Availability zones: {}'.format(availability_zones))
         vpc_net = VPC_NET
         if 'vpc_net' in cfg and region in cfg['vpc_net']:
             vpc_net = IPNetwork(cfg['vpc_net'][region]['network'])
@@ -715,6 +736,14 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
                 tags.update(additional_tags)
                 vpc.add_tags(tags)
         info(vpc)
+        with Action('Check Flow Logs') as act:
+            if not exist_flowlog(region, vpc.id):
+                ec2.create_flow_logs(ResourceIds=[vpc.id],
+                                     ResourceType='VPC',
+                                     TrafficType='ALL',
+                                     LogGroupName='vpc-flowgroup',
+                                     DeliverLogsPermissionArn='arn:aws:iam::{}:role/vpc-flowlogs'.format(account_id))
+
         subnets = vpc_conn.get_all_subnets(filters={'vpcId': [vpc.id]})
         for subnet in subnets:
             if not subnet.tags.get('Name'):
