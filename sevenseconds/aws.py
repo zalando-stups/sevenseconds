@@ -273,7 +273,7 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
         with Action('[{}] Check CloudTrail..'.format(region)) as act:
             if not dry_run:
                 if (trail['IncludeGlobalServiceEvents'] != kwargs['IncludeGlobalServiceEvents'] or
-                        trail['S3KeyPrefix'] != kwargs['S3KeyPrefix'] or
+                        trail.get('S3KeyPrefix', '') != kwargs['S3KeyPrefix'] or
                         trail['S3BucketName'] != kwargs['S3BucketName']):
                     act.error('wrong configuration')
                     cloudtrail.update_trail(**kwargs)
