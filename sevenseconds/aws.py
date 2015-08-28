@@ -876,18 +876,30 @@ def configure_s3_buckets(account_name: str, cfg: dict):
     for _, config in cfg.get('s3_buckets', {}).items():
         for region in config.get('regions', []):
             bucket_name = config['name']
-            bucket_name = bucket_name.replace('{account_id}', account_id).replace('{region}', region)
+            bucket_name = bucket_name.format(account_id=account_id, region=region)
             s3 = boto.s3.connect_to_region(region)
             with Action('Checking S3 bucket {}..'.format(bucket_name)):
                 bucket = s3.lookup(bucket_name)
             if not bucket:
                 with Action('Creating S3 bucket {}..'.format(bucket_name)):
                     s3.create_bucket(bucket_name, location=region)
-            with Action('Updating policy for S3 bucket {}..'.format(bucket_name)):
-                bucket = s3.lookup(bucket_name)
-                policy_json = json.dumps(config.get('policy'))
-                policy_json = policy_json.replace('{bucket_name}', bucket_name)
-                bucket.set_policy(policy_json)
+            policy = config.get('policy', None)
+            if policy is not None:
+                with Action('Updating policy for S3 bucket {}..'.format(bucket_name)):
+                    bucket = s3.lookup(bucket_name)
+                    policy_json = json.dumps(policy)
+                    policy_json = policy_json.replace('{bucket_name}', bucket_name)
+                    bucket.set_policy(policy_json)
+            logging_target = config.get('logging_target', None)
+            if logging_target is not None:
+                logging_target = logging_target.format(account_id=account_id, region=region)
+                with Action('Check logging target {}'.format(logging_target)):
+                    logging_bucket = s3.lookup(logging_target)
+                    logging_bucket.set_as_logging_target()
+                if logging_bucket is not None:
+                    with Action('Enable logging for S3 bucket {} to {}..'.format(bucket_name, logging_target)):
+                        bucket = s3.lookup(bucket_name)
+                        bucket.enable_logging(logging_target, target_prefix='logs/')
 
 
 def configure_security_groups(cfg: dict, region, trusted_addresses):
