@@ -735,7 +735,7 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
                     additional_tags[key] = val.replace('{{ami_id}}', ami_id)
                 tags.update(additional_tags)
                 vpc.add_tags(tags)
-        info(vpc)
+        info(str(vpc))
         with Action('Check Flow Logs') as act:
             if not exist_flowlog(region, vpc.id):
                 ec2.create_flow_logs(ResourceIds=[vpc.id],
@@ -895,9 +895,9 @@ def configure_s3_buckets(account_name: str, cfg: dict):
                 logging_target = logging_target.format(account_id=account_id, region=region)
                 with Action('Check logging target {}'.format(logging_target)):
                     logging_bucket = s3.lookup(logging_target)
-                    logging_bucket.set_as_logging_target()
                 if logging_bucket is not None:
                     with Action('Enable logging for S3 bucket {} to {}..'.format(bucket_name, logging_target)):
+                        logging_bucket.set_as_logging_target()
                         bucket = s3.lookup(bucket_name)
                         bucket.enable_logging(logging_target, target_prefix='logs/')
 
@@ -942,7 +942,7 @@ def chunks(l, n):
     StopIteration
     """
     for i in range(0, len(l), n):
-        yield l[i:i+n]
+        yield l[i:i + n]
 
 
 def consolidate_networks(networks: set, min_prefixlen: int):
