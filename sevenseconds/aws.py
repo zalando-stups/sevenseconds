@@ -735,7 +735,9 @@ def configure_account(account_name: str, cfg: dict, trusted_addresses: set, dry_
                     additional_tags[key] = val.replace('{{ami_id}}', ami_id)
                 tags.update(additional_tags)
                 vpc.add_tags(tags)
-        info(str(vpc))
+                vpc_conn.modify_vpc_attribute(vpc.id, enable_dns_support=True)
+                vpc_conn.modify_vpc_attribute(vpc.id, enable_dns_hostnames=True)
+        info(vpc)
         with Action('Check Flow Logs') as act:
             if not exist_flowlog(region, vpc.id):
                 ec2.create_flow_logs(ResourceIds=[vpc.id],
