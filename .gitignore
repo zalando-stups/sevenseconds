@@ -10,3 +10,4 @@ dist/
 *.key
 *.csr
 *.pem
+.cache
