@@ -102,6 +102,19 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
     account_names = []
+    use_saml_credentials = True
+    if (len(account_name_pattern) == 1
+            and os.environ.get('AWS_PROFILE')
+            and os.environ.get('AWS_PROFILE') in account_name_pattern):
+        use_saml_credentials = False
+    elif len(account_name_pattern) == 0:
+        if os.environ.get('AWS_PROFILE'):
+            account_name_pattern = {os.environ.get('AWS_PROFILE')}
+            use_saml_credentials = False
+        else:
+            error('No AWS accounts given!')
+            return
+
     for pattern in account_name_pattern:
         account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
 
@@ -133,7 +146,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
         saml_url = cfg.get('saml_identity_provider_url')
         saml_role = cfg.get('saml_admin_login_role')
 
-        if saml_user and saml_url and saml_role:
+        if use_saml_credentials and saml_user and saml_url and saml_role:
             account_alias = cfg.get('alias', account_name).format(account_name=account_name)
             aws_profile = 'sevenseconds-{}'.format(account_name)
             if not get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_alias, aws_profile):
