@@ -11,7 +11,7 @@ from netaddr import IPNetwork
 import dateutil.parser
 import datetime
 
-from clickclick import error, Action, info, warning
+from clickclick import error, Action, info, warning, fatal_error
 import boto.cloudtrail
 import boto.exception
 import boto.vpc
@@ -22,6 +22,7 @@ import boto.iam
 import boto.ec2.autoscale
 import boto.s3
 import boto3
+import botocore.exceptions
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
@@ -55,6 +56,7 @@ def configure_subnet(vpc_conn, vpc, az, _type: str, net: IPNetwork, subnets: lis
 def get_az_names(region: str):
     names = AZ_NAMES_BY_REGION.get(region)
     if not names:
+        boto3.DEFAULT_SESSION = None
         conn = boto3.client('ec2', region)
         ec2_zones = conn.describe_availability_zones(Filters=[{'Name': 'state', 'Values': ['available']}])
         names = [z['ZoneName'] for z in ec2_zones['AvailabilityZones']]
@@ -402,7 +404,51 @@ def get_account_alias():
     return conn.list_account_aliases()['AccountAliases'][0]
 
 
+def check_policy_simulator(cfg):
+    return
+    roles = cfg.get('roles', {})
+    checks = cfg.get('roles_simulator', {})
+    iamc = boto3.client('iam')
+    errorcount = 0
+    for rolename, rolechecks in sorted(checks.items()):
+        errormsg = []
+        errorfound = False
+        with Action('Checking role {rolename}..', **vars()) as act:
+            for checkname, checkoptions in sorted(rolechecks.items()):
+                try:
+                    result = iamc.simulate_custom_policy(PolicyInputList=[json.dumps(roles[rolename]['policy'])],
+                                                         **checkoptions['simulation_options'])
+                except botocore.exceptions.ClientError as e:
+                    act.fatal_error(e)
+
+                results = result['EvaluationResults']
+                while result.get('IsTruncated', False):
+                    result = iamc.simulate_custom_policy(Marker=result['Marker'],
+                                                         PolicyInputList=[json.dumps(roles[rolename]['policy'])],
+                                                         **checkoptions['simulation_options'])
+                    results.extend(result['EvaluationResults'])
+                for result in results:
+                    if result['EvalDecision'] != checkoptions['simulation_result']:
+                        errorfound = True
+                        errorcount += 1
+                        errormsg.append('[{}] {} is {} and NOT {}'.format(checkname,
+                                                                          result['EvalActionName'],
+                                                                          result['EvalDecision'],
+                                                                          checkoptions['simulation_result']))
+            if errorfound:
+                act.error('missmatch')
+        if len(errormsg):
+            print('\n'.join(errormsg))
+    if errorcount:
+        fatal_error('found {} error(s) in the policys. Abort!'.format(errorcount))
+
+
 def configure_iam(account_name: str, dns_domain: str, cfg):
+    configure_iam_policy(cfg)
+    configure_iam_certificate(dns_domain)
+
+
+def configure_iam_policy(cfg):
     # NOTE: hardcoded region as IAM is region-independent
     conn = boto.iam.connect_to_region('eu-west-1')
     iam = boto3.resource('iam')
@@ -464,6 +510,9 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
                 saml_metadata_document = r.text
                 conn.create_saml_provider(saml_metadata_document, name)
 
+
+def configure_iam_certificate(dns_domain: str):
+    conn = boto.iam.connect_to_region('eu-west-1')
     cert_name = dns_domain.replace('.', '-')
     certs = conn.list_server_certs()['list_server_certificates_response']['list_server_certificates_result']
     certs = certs['server_certificate_metadata_list']
@@ -484,7 +533,10 @@ def configure_iam(account_name: str, dns_domain: str, cfg):
                     with open(file + '.key') as fd:
                         private_key = fd.read()
                 elif os.path.isfile(file + '.key.gpg') and os.path.getsize(file + '.key.gpg') > 0:
-                    gpg = gnupg.GPG()
+                    try:
+                        gpg = gnupg.GPG(homedir=os.path.abspath(os.path.join(os.environ.get('HOME', '~'), '.gnupg')))
+                    except TypeError:
+                        gpg = gnupg.GPG(gnupghome=os.path.abspath(os.path.join(os.environ.get('HOME', '~'), '.gnupg')))
                     with open(file + '.key.gpg', 'rb') as fd:
                         gpg_obj = gpg.decrypt_file(fd)
                     if gpg_obj.ok:
@@ -563,6 +615,7 @@ def configure_bastion_host(account_name: str, dns_domain: str, ec2_conn, subnets
 
     instances = ec2_conn.get_only_instances(filters={'tag:Name': sg_name, 'instance-state-name': 'running'})
     re_deploy = cfg.get('re_deploy')
+    # TODO: drop_bastionhost, if instance older then 40 days
     if instances and re_deploy:
         for instance in instances:
             drop_bastionhost(instance)

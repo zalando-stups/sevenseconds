@@ -6,7 +6,7 @@ import yaml
 import socket
 import os
 import sys
-from sevenseconds.aws import configure_account, destroy_account, get_az_names, get_role_ldif
+from sevenseconds.aws import configure_account, destroy_account, get_az_names, get_role_ldif, check_policy_simulator
 
 import sevenseconds
 from clickclick import AliasedGroup, error, Action, info, warning
@@ -127,6 +127,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
     global_cfg = config.get('global', {})
     saml_url = global_cfg.get('saml_identity_provider_url')
     saml_role = global_cfg.get('saml_admin_login_role')
+    roles_checked = False
 
     if saml_user and saml_url and saml_role:
         admin_account = global_cfg.get('admin_account')
@@ -153,6 +154,10 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
                 warning('Skipping account configuration of {} due to missing credentials'.format(account_name))
                 continue
             os.environ['AWS_PROFILE'] = aws_profile
+
+        if not roles_checked:
+            check_policy_simulator(cfg)
+            roles_checked = True
 
         if not trusted_addresses:
             trusted_addresses = get_trusted_addresses(config)
