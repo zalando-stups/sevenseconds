@@ -16,17 +16,25 @@ from aws_saml_login import authenticate, assume_role, write_aws_credentials
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
 
 
-def print_version(ctx, param, value):
-    if not value or ctx.resilient_parsing:
-        return
-    click.echo('AWS Account Configurator {}'.format(sevenseconds.__version__))
-    ctx.exit()
-
-
-@click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
-@click.option('-V', '--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True)
-def cli():
-    pass
+def get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_alias, credential_name):
+    if not saml_password:
+        saml_password = keyring.get_password('sevenseconds', saml_user)
+    if not saml_password:
+        saml_password = click.prompt('Please enter your SAML password', hide_input=True)
+    with Action('[{}] Authenticating against {}..'.format(credential_name, saml_url)):
+        saml_xml, roles = authenticate(saml_url, saml_user, saml_password)
+    keyring.set_password('sevenseconds', saml_user, saml_password)
+    matching_roles = [(parn, rarn, aname)
+                      for parn, rarn, aname in roles if aname == account_alias and rarn.endswith(saml_role)]
+    if not matching_roles:
+        error('[{}] No matching role found for account {}'.format(credential_name, account_alias))
+        return False
+    else:
+        role = matching_roles[0]
+        with Action('[{}] Assuming role {}..'.format(credential_name, role)):
+            key_id, secret, session_token = assume_role(saml_xml, role[0], role[1])
+        write_aws_credentials(credential_name, key_id, secret, session_token)
+        return True
 
 
 def get_trusted_addresses(config: dict):
@@ -62,19 +70,24 @@ def get_trusted_addresses(config: dict):
     return addresses
 
 
+def print_version(ctx, param, value):
+    if not value or ctx.resilient_parsing:
+        return
+    click.echo('AWS Account Configurator {}'.format(sevenseconds.__version__))
+    ctx.exit()
+
+
+@click.group(cls=AliasedGroup, context_settings=CONTEXT_SETTINGS)
+@click.option('-V', '--version', is_flag=True, callback=print_version, expose_value=False, is_eager=True)
+def cli():
+    pass
+
+
 @cli.command()
-@click.argument('file', type=click.File('rb'))
-@click.argument('region_name')
-@click.argument('security_group')
-def update_security_group(file, region_name, security_group):
-    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
-    config = yaml.safe_load(file)
-
-    addresses = get_trusted_addresses(config)
-
-    info('\n'.join(sorted(addresses)))
-
-    update_security_group(region_name, security_group, addresses)
+@click.argument('account_name')
+@click.argument('region')
+def destroy(account_name, region):
+    destroy_account(account_name, region)
 
 
 @cli.command()
@@ -168,25 +181,16 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
             error('Error while configuring {}: {}'.format(account_name, traceback.format_exc()))
 
 
-def get_aws_credentials(saml_user, saml_password, saml_url, saml_role, account_alias, credential_name):
-    if not saml_password:
-        saml_password = keyring.get_password('sevenseconds', saml_user)
-    if not saml_password:
-        saml_password = click.prompt('Please enter your SAML password', hide_input=True)
-    with Action('[{}] Authenticating against {}..'.format(credential_name, saml_url)):
-        saml_xml, roles = authenticate(saml_url, saml_user, saml_password)
-    keyring.set_password('sevenseconds', saml_user, saml_password)
-    matching_roles = [(parn, rarn, aname)
-                      for parn, rarn, aname in roles if aname == account_alias and rarn.endswith(saml_role)]
-    if not matching_roles:
-        error('[{}] No matching role found for account {}'.format(credential_name, account_alias))
-        return False
-    else:
-        role = matching_roles[0]
-        with Action('[{}] Assuming role {}..'.format(credential_name, role)):
-            key_id, secret, session_token = assume_role(saml_xml, role[0], role[1])
-        write_aws_credentials(credential_name, key_id, secret, session_token)
-        return True
+@cli.command()
+@click.argument('file', type=click.File('rb'))
+@click.argument('region_name')
+@click.argument('security_group')
+def update_security_group(file, region_name, security_group):
+    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
+    config = yaml.safe_load(file)
+    addresses = get_trusted_addresses(config)
+    info('\n'.join(sorted(addresses)))
+    update_security_group(region_name, security_group, addresses)
 
 
 @cli.command('role-ldif')
@@ -231,13 +235,6 @@ def role_ldif(configuration_file, account_name_pattern, saml_user, saml_password
                 continue
             os.environ['AWS_PROFILE'] = aws_profile
         print(get_role_ldif(cfg))
-
-
-@cli.command()
-@click.argument('account_name')
-@click.argument('region')
-def destroy(account_name, region):
-    destroy_account(account_name, region)
 
 
 def main():
