@@ -272,7 +272,7 @@ def configure_cloudtrail(account_name, region, cfg, dry_run):
                   S3KeyPrefix=cfg['cloudtrail']['s3_key_prefix'],
                   IncludeGlobalServiceEvents=True)
     if trail:
-        with Action('[{}] Check CloudTrail..'.format(region)) as act:
+        with Action('[{}] Checking CloudTrail..'.format(region)) as act:
             if not dry_run:
                 if (trail['IncludeGlobalServiceEvents'] != kwargs['IncludeGlobalServiceEvents'] or
                         trail.get('S3KeyPrefix', '') != kwargs['S3KeyPrefix'] or
