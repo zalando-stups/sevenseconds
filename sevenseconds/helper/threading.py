@@ -1,4 +1,4 @@
-from queue import Queue
+from queue import Queue  # noqa (reexport)
 from threading import Thread
 
 

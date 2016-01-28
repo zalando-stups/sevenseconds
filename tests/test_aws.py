@@ -1,6 +1,7 @@
 import pytest
 from unittest.mock import MagicMock
-from sevenseconds.aws import get_account_id, get_az_names, configure_cloudtrail
+from sevenseconds.helper.aws import get_account_id, get_az_names
+from sevenseconds.config.cloudtrail import configure_cloudtrail
 from datetime import datetime
 import botocore.exceptions
 
@@ -14,8 +15,8 @@ def test_get_account_id(monkeypatch):
         'CreateDate': datetime(2015, 1, 1),
         'PasswordLastUsed': datetime(2015, 1, 1)
         }})
-    monkeypatch.setattr('boto3.client', lambda x: conn)
-    id = get_account_id()
+    session = MagicMock(client=MagicMock(return_value=conn))
+    id = get_account_id(session)
     assert id == '01234567', 'ID from current User'
 
     conn = MagicMock(
@@ -43,8 +44,8 @@ def test_get_account_id(monkeypatch):
             'IsTruncated': False,
             'NextToken': 'string'
         })
-    monkeypatch.setattr('boto3.client', lambda x: conn)
-    id = get_account_id()
+    session = MagicMock(client=MagicMock(return_value=conn))
+    id = get_account_id(session)
     assert id == '01234567', 'ID from exisiting Role'
 
     conn = MagicMock(
@@ -65,8 +66,8 @@ def test_get_account_id(monkeypatch):
                 'Path': '/',
                 'UserId': 'AIABCEFG',
                 'UserName': 'test'}]})
-    monkeypatch.setattr('boto3.client', lambda x: conn)
-    id = get_account_id()
+    session = MagicMock(client=MagicMock(return_value=conn))
+    id = get_account_id(session)
     assert id == '1234567', 'ID from existing Users'
 
     conn = MagicMock(
@@ -99,8 +100,8 @@ def test_get_account_id(monkeypatch):
                 'RoleId': 'string'}}
         )
 
-    monkeypatch.setattr('boto3.client', lambda x: conn)
-    id = get_account_id()
+    session = MagicMock(client=MagicMock(return_value=conn))
+    id = get_account_id(session)
     assert id == '01234567', 'ID from temporay Role'
 
 
@@ -123,14 +124,14 @@ def test_get_az_names(monkeypatch):
                 'State': 'available',
                 'Messages': []
             }]})
-    monkeypatch.setattr('boto3.client', lambda x, y: conn)
-    names = get_az_names('eu-west-1')
+    session = MagicMock(client=MagicMock(return_value=conn))
+    names = get_az_names(session, 'eu-west-1')
     assert 'eu-west-1b' in names, 'AZ found'
 
     conn = MagicMock(describe_availability_zones=lambda **kargs: {
         'AvailabilityZones': []})
-    monkeypatch.setattr('boto3.client', lambda x, y: conn)
-    names = get_az_names('eu-west-1')
+    session = MagicMock(client=MagicMock(return_value=conn))
+    names = get_az_names(session, 'eu-west-1')
     assert 'eu-west-1b' in names, 'AZ found from Cache'
 
 
@@ -139,10 +140,9 @@ def test_configure_cloudtrail(monkeypatch):
         assert 'Found no Cloudtrail Section in Configfile.' in text
 
     monkeypatch.setattr('clickclick.info', myinfo)
-    configure_cloudtrail('name',
-                         'region-1',
-                         {},
-                         False)
+    account = MagicMock(name='name',
+                        config={})
+    configure_cloudtrail(account)
 
     class _test:
         def _only_kwargs(f):
@@ -192,16 +192,12 @@ def test_configure_cloudtrail(monkeypatch):
         def get_trail_status(Name):
             return {'IsLogging': True}
 
-    monkeypatch.setattr('boto3.client', lambda x, y: _test)
-    configure_cloudtrail('name',
-                         'region-1',
-                         {'cloudtrail': {'s3_bucket_name': 'bucketname', 's3_key_prefix': ''}},
-                         False)
+    account = MagicMock(name='name',
+                        config={'cloudtrail': {'s3_bucket_name': 'bucketname', 's3_key_prefix': ''}},
+                        client=MagicMock(return_value=_test))
+    configure_cloudtrail(account)
     _test.get_trail_status = lambda Name: {'IsLogging': False}
-    configure_cloudtrail('name',
-                         'region-1',
-                         {'cloudtrail': {'s3_bucket_name': 'bucketname', 's3_key_prefix': ''}},
-                         False)
+    configure_cloudtrail(account)
     _test.get_trail_status = lambda Name: {'IsLogging': True}
     _test.describe_trails = lambda: {
         'trailList': [
@@ -211,10 +207,7 @@ def test_configure_cloudtrail(monkeypatch):
                 'S3BucketName': 'oldbucketname',
                 'S3KeyPrefix': 'dummy'
             }]}
-    configure_cloudtrail('name',
-                         'region-1',
-                         {'cloudtrail': {'s3_bucket_name': 'bucketname', 's3_key_prefix': ''}},
-                         False)
+    configure_cloudtrail(account)
     _test.describe_trails = lambda: {
         'trailList': [
             {
@@ -223,10 +216,7 @@ def test_configure_cloudtrail(monkeypatch):
                 'S3BucketName': 'oldbucketname',
                 'S3KeyPrefix': 'dummy'
             }]}
-    configure_cloudtrail('name',
-                         'region-1',
-                         {'cloudtrail': {'s3_bucket_name': 'bucketname', 's3_key_prefix': ''}},
-                         False)
+    configure_cloudtrail(account)
 
 
 if __name__ == '__main__':

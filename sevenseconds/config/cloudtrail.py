@@ -58,6 +58,8 @@ def drop_old_cloudtrails_worker(session, region, dry_run):
 
 
 def configure_cloudtrail(account: object):
+    if 'cloudtrail' not in account.config:
+        return
     region = account.config['cloudtrail'].get('home_region', DEFAULT_CLOUDTRAIL_REGION)
     cloudtrail = account.session.client('cloudtrail', region)
     trails = cloudtrail.describe_trails()['trailList']

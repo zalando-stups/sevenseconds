@@ -16,6 +16,7 @@ def get_aws_credentials(saml_batch, saml_user, saml_password):
     if not saml_password:
         saml_password = click.prompt('Please enter your SAML password', hide_input=True)
     credentials = {}
+    worker_result = []
     for saml_url in saml_batch:
         with Action('Authenticating against {}..'.format(saml_url)):
             saml_xml, roles = authenticate(saml_url, saml_user, saml_password)
