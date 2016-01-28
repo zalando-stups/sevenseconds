@@ -22,9 +22,9 @@ def configure_iam_policy(account: object):
         with ActionOnExit('Checking role {role_name}..', **vars()) as act:
             try:
                 role_policy = iam.RolePolicy(role_name, role_name)
-                if (role_policy.policy_document == role_cfg['policy']
-                   and len(list(role_policy.Role().policies.all())) == 1
-                   and len(list(iam.Role(role_name).attached_policies.all())) == 0):
+                if (role_policy.policy_document == role_cfg['policy'] and
+                   len(list(role_policy.Role().policies.all())) == 1 and
+                   len(list(iam.Role(role_name).attached_policies.all())) == 0):
                     continue
                 else:
                     act.error('missmatch')

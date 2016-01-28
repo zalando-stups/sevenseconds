@@ -50,7 +50,7 @@ def configure_vpc(account, region):
                     'Value': val.replace('{{ami_id}}', ami_id).replace(
                         '{{base_ami_config}}',
                         json.dumps(account.config.get('base_ami'), sort_keys=True))
-                    })
+                })
             vpc.create_tags(Tags=tags)
             vpc.modify_attribute(EnableDnsSupport={'Value': True})
             vpc.modify_attribute(EnableDnsHostnames={'Value': True})
@@ -103,8 +103,8 @@ def delete_vpc(vpc: object, region: str):
     instances2delete = []
     instances2clarify = []
     for instance in vpc.instances.all():
-        if (get_tag(instance.tags, 'Name', str).startswith('NAT {}'.format(region))
-                or get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)'):
+        if (get_tag(instance.tags, 'Name', str).startswith('NAT {}'.format(region)) or
+                get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)'):
             instances2delete.append(instance)
         else:
             instances2clarify.append(instance)
@@ -195,12 +195,12 @@ def configure_subnet(vpc, az, _type: str, cidr: IPNetwork, dry_run: bool, waiter
                      'Values': [str(cidr)]},
                     {'Name': 'availabilityZone',
                      'Values': [az]}
-                    ])
+                ])
                 # We are to fast for AWS (InvalidSubnetID.NotFound)
                 subnet.create_tags(Tags=[
                     {'Key': 'Name',
                      'Value': name}
-                    ])
+                ])
 
 
 def find_subnet(vpc: object, cidr):
@@ -292,7 +292,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
                          'Values': ['available']},
                         {'Name': 'root-device-type',
                          'Values': ['ebs']}
-                        ]
+                    ]
                     images = sorted(ec2.images.filter(Filters=filters), key=lambda x: x.creation_date, reverse=True)
                     most_recent_image = images[0]
                     instance = subnet.create_instances(ImageId=most_recent_image.id,

@@ -87,9 +87,9 @@ def update_endpoints():
                         for endpoint in data[endpoint_idx].split('\n'):
                             if endpoint.endswith('amazonaws.com'):
                                 servicename_long = endpoint.split('.')[0]
-                                if (servicename_long.startswith('eu-')
-                                        or servicename_long.startswith('us-')
-                                        or servicename_long.startswith('ap-')):
+                                if (servicename_long.startswith('eu-') or
+                                        servicename_long.startswith('us-') or
+                                        servicename_long.startswith('ap-')):
                                     servicename_long = endpoint.split('.')[1]
                                 if endpoints.get(servicename_long) is None:
                                     endpoints[servicename_long] = {}

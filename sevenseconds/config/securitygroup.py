@@ -118,7 +118,7 @@ def update_security_group(session: object, region: str, sg_name: str, trusted_ad
             permission_count = 1
         networks = trusted_addresses
         prefixlen = 31
-        while len(networks) > 50/permission_count:
+        while len(networks) > 50 / permission_count:
             networks = consolidate_networks(networks, prefixlen)
             prefixlen -= 1
         info('{}/{} Prefixlen: {}, {} networks: {}'.format(region, sg_name, prefixlen, len(networks), networks))
