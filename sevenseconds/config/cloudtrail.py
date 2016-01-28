@@ -69,7 +69,7 @@ def configure_cloudtrail(account: object):
                   IsMultiRegionTrail=True,
                   IncludeGlobalServiceEvents=True)
     if trail:
-        with ActionOnExit('[{}] Check CloudTrail in region {}..'.format(account.name, region)) as act:
+        with ActionOnExit('[{}] Checking CloudTrail in region {}..'.format(account.name, region)) as act:
             if not account.dry_run:
                 if (trail['IncludeGlobalServiceEvents'] != kwargs['IncludeGlobalServiceEvents'] or
                         trail.get('S3KeyPrefix', '') != kwargs['S3KeyPrefix'] or
