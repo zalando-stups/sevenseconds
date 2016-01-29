@@ -1,4 +1,3 @@
-from clickclick import Action
 from ..helper import info, ActionOnExit
 
 
@@ -47,7 +46,7 @@ def permit_base_image(account: object, region: str):
     ami_ec2 = account.ami_session.resource('ec2', region)
     base_ami = account.config['base_ami']
     name = base_ami['name']
-    with Action('Permit "{}" for "{}/{}"..'.format(name, account.id, account.alias)) as act:
+    with ActionOnExit('Permit "{}" for "{}/{}"..'.format(name, account.id, account.alias)) as act:
         if ami_ec2:
             images = []
             for image in search_base_ami_ids(account.ami_session, account.config, region):
@@ -61,7 +60,7 @@ def permit_base_image(account: object, region: str):
         else:
             act.error('No connection to "base_ami_account"')
     if images:
-        with Action('Waiting of AWS-Sync'):
+        with ActionOnExit('Waiting of AWS-Sync'):
             ec2c = account.session.client('ec2', region)
             waiter = ec2c.get_waiter('image_available')
             waiter.wait(Filters=get_filter(**base_ami))

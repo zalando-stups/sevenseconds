@@ -9,7 +9,9 @@ from itertools import repeat
 from multiprocessing import Pool
 import traceback
 from collections import namedtuple
-from ..helper import error, info
+import time
+from datetime import timedelta
+from ..helper import error, info, ok
 from ..helper.aws import get_account_id, get_account_alias
 from .policysimulator import check_policy_simulator
 from .cloudtrail import configure_cloudtrail_all_regions
@@ -22,6 +24,7 @@ from .bastion import configure_bastion_host
 from .elasticache import configure_elasticache
 from .rds import configure_rds
 from .securitygroup import configure_security_groups
+from ..helper.threading import ThreadWorker, Queue
 import sevenseconds.helper
 
 AccountData = namedtuple('AccountData', 'name, alias, id, session, admin_session, ami_session, config, dry_run')
@@ -38,11 +41,12 @@ def configure_account_except(session_data: AccountData, trusted_addresses: set):
     try:
         configure_account(session_data, trusted_addresses)
     except Exception as e:
-        error('[{}] {}'.format(session_data.name, traceback.format_exc()))
-        error('[{}] {}'.format(session_data.name, e))
+        error(traceback.format_exc())
+        error(e)
 
 
 def configure_account(session_data: AccountData, trusted_addresses: set):
+    start_time = time.time()
     sevenseconds.helper.PROGNAME = session_data.name
     session = {}
     for session_name in ('session', 'admin_session', 'ami_session'):
@@ -68,10 +72,25 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     configure_s3_buckets(account)
 
     regions = account.config['regions']
+    # Create a queue to communicate with the worker threads
+    queue = Queue()
+    # Create X worker threads
+    for x in range(len(regions)):
+        worker = ThreadWorker(queue, configure_account_region)
+        # Setting daemon to True will let the main thread exit even though the workers are blocking
+        worker.daemon = True
+        worker.start()
+    # Put the tasks into the queue as a tuple
     for region in regions:
-        configure_log_group(account.session, region)
-        vpc = configure_vpc(account, region)
-        configure_bastion_host(account, vpc, region)
-        configure_elasticache(account.session, region, vpc)
-        configure_rds(account.session, region, vpc)
-        configure_security_groups(account, region, trusted_addresses)
+        queue.put((account, region, trusted_addresses))
+    queue.join()
+    ok('Done with {} / {} after {}'.format(account.id, account.name, timedelta(seconds=time.time() - start_time)))
+
+
+def configure_account_region(account: object, region: str, trusted_addresses: set):
+    configure_log_group(account.session, region)
+    vpc = configure_vpc(account, region)
+    configure_bastion_host(account, vpc, region)
+    configure_elasticache(account.session, region, vpc)
+    configure_rds(account.session, region, vpc)
+    configure_security_groups(account, region, trusted_addresses)

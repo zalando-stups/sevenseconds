@@ -1,6 +1,5 @@
 import os
 import click
-from clickclick import Action
 import keyring
 import botocore.exceptions
 from itertools import repeat
@@ -18,7 +17,7 @@ def get_aws_credentials(saml_batch, saml_user, saml_password):
     credentials = {}
     worker_result = []
     for saml_url in saml_batch:
-        with Action('Authenticating against {}..'.format(saml_url)):
+        with ActionOnExit('Authenticating against {}..'.format(saml_url)):
             saml_xml, roles = authenticate(saml_url, saml_user, saml_password)
             keyring.set_password('sevenseconds', saml_user, saml_password)
 

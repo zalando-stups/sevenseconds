@@ -2,9 +2,12 @@ import sys
 import click
 from clickclick import secho
 import yaml
+from datetime import timedelta
+import time
 
 CONFIG_DIR_PATH = click.get_app_dir('sevenseconds')
 PROGNAME = 'GLOBAL'
+START_TIME = time.time()
 
 
 class ActionOnExit:
@@ -14,6 +17,8 @@ class ActionOnExit:
         self.errors = []
         self._suppress_exception = False
         self.ok_msg = ' OK'
+        self.call_time = time.time()
+        self._print(' ...')
 
     def __enter__(self):
         return self
@@ -24,12 +29,12 @@ class ActionOnExit:
                 self.msg += click.style(' {}'.format(self.ok_msg), fg='green', bold=True)
         elif not self._suppress_exception:
             self.msg += click.style(' EXCEPTION OCCURRED: {}'.format(exc_val), fg='red', bold=True)
-        print('[{:>15}] {}'.format(PROGNAME, self.msg))
+        self._print(' +{:.6f}s'.format(time.time() - self.call_time))
 
     def fatal_error(self, msg, **kwargs):
         self._suppress_exception = True  # Avoid printing "EXCEPTION OCCURRED: -1" on exit
         self.error(msg, **kwargs)
-        print('[{:>15}] {}'.format(PROGNAME, self.msg))
+        self._print(' +{:.6f}s'.format(time.time() - self.call_time))
         sys.exit(1)
 
     def error(self, msg, **kwargs):
@@ -46,22 +51,43 @@ class ActionOnExit:
     def ok(self, msg):
         self.ok_msg = ' {}'.format(msg)
 
+    def _print(self, suffix=''):
+        elapsed_seconds = time.time() - START_TIME
+        # using timedelta here for convenient default formatting
+        elapsed = timedelta(seconds=elapsed_seconds)
+        print('[{:>15} | {}] {}{}'.format(
+            PROGNAME,
+            elapsed,
+            self.msg,
+            suffix))
+
+
+def _secho(msg, **kwargs):
+    elapsed_seconds = time.time() - START_TIME
+    # using timedelta here for convenient default formatting
+    elapsed = timedelta(seconds=elapsed_seconds)
+    secho('[{:>15} | {}] {}'.format(PROGNAME, elapsed, msg), **kwargs)
+
 
 def error(msg, **kwargs):
-    secho('[{:>15}] {}'.format(PROGNAME, msg), fg='red', bold=True, **kwargs)
+    _secho(msg, fg='red', bold=True, **kwargs)
 
 
 def fatal_error(msg, **kwargs):
-    error('[{:>15}] {}'.format(PROGNAME, msg), **kwargs)
+    error(msg, **kwargs)
     sys.exit(1)
 
 
+def ok(msg=' OK', **kwargs):
+    _secho(msg, fg='green', bold=True, **kwargs)
+
+
 def warning(msg, **kwargs):
-    secho('[{:>15}] {}'.format(PROGNAME, msg), fg='yellow', bold=True, **kwargs)
+    _secho(msg, fg='yellow', bold=True, **kwargs)
 
 
 def info(msg):
-    secho('[{:>15}] {}'.format(PROGNAME, msg), fg='blue', bold=True)
+    _secho(msg, fg='blue', bold=True)
 
 
 def substitute_template_vars(data, context: dict):

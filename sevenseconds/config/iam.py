@@ -103,14 +103,25 @@ def configure_iam_certificate(session, dns_domain: str):
                     else:
                         act.error('decryption error: {}'.format(gpg_obj.stderr))
                         return
-                with open(dir + 'trusted_chain.pem') as fd:
+                with open(dir + 'trusted_chain_sha256.pem') as fd:
                     cert_chain = fd.read()
-                iam.create_server_certificate(
-                    Path='/',
-                    ServerCertificateName=cert_name,
-                    CertificateBody=cert_body,
-                    PrivateKey=private_key,
-                    CertificateChain=cert_chain
-                )
+                try:
+                    iam.create_server_certificate(
+                        Path='/',
+                        ServerCertificateName=cert_name,
+                        CertificateBody=cert_body,
+                        PrivateKey=private_key,
+                        CertificateChain=cert_chain
+                    )
+                except:
+                    with open(dir + 'trusted_chain.pem') as fd:
+                        cert_chain = fd.read()
+                    iam.create_server_certificate(
+                        Path='/',
+                        ServerCertificateName=cert_name,
+                        CertificateBody=cert_body,
+                        PrivateKey=private_key,
+                        CertificateChain=cert_chain
+                    )
             except FileNotFoundError as e:
                 act.error('Could not upload SSL cert: {}'.format(e))

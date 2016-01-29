@@ -279,6 +279,9 @@ def create_nat_instances(account: object, vpc: object, region: str):
 
         if nat_gateway:
             nat_instance_by_az[az_name] = {'NatGatewayId': nat_gateway[0]['NatGatewayId']}
+            if nat_gateway[0]['State'] == 'pending':
+                info('Nat Gateway is pending. Skipping subnet..')
+                continue
             ip = [x['PublicIp'] for x in nat_gateway[0]['NatGatewayAddresses']]
         elif instances:
             instance = instances[0]
@@ -345,6 +348,14 @@ def create_nat_instances(account: object, vpc: object, region: str):
                                                               ip))
 
         configure_dns_record(account, 'nat-{}'.format(az_name), ip)
+    filters = [
+        {'Name': 'state', 'Values': ['pending']}
+    ]
+    pending_nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
+    if len(pending_nat_gateway):
+        with ActionOnExit('Waiting of pending NAT Gateways..'):
+            while len(ec2c.describe_nat_gateways(Filter=filters)['NatGateways']):
+                time.sleep(15)
 
     return nat_instance_by_az
 

@@ -1,6 +1,7 @@
 from ..helper import ActionOnExit
 
 AZ_NAMES_BY_REGION = {}
+PENDING_ASSOCIATIONS = {}
 
 
 def filter_subnets(vpc: object, _type: str):
@@ -78,12 +79,14 @@ def get_tag(tags: list, key: str, default=None):
 def associate_address(ec2c: object, instance_id: str=None):
     addr = None
     for vpc_addresse in ec2c.describe_addresses()['Addresses']:
-        if vpc_addresse.get('AssociationId') is None:
+        if (vpc_addresse.get('AssociationId') is None and
+                vpc_addresse.get('AllocationId') not in PENDING_ASSOCIATIONS.keys()):
             # use existing Elastic IP (e.g. to re-use IP from previous bastion host)
             addr = vpc_addresse
     if addr is None:
         addr = ec2c.allocate_address(Domain='vpc')
     if instance_id is None:
+        PENDING_ASSOCIATIONS[addr.get('AllocationId')] = addr.get('PublicIp')
         return addr.get('AllocationId'), addr.get('PublicIp')
     else:
         ec2c.associate_address(InstanceId=instance_id,
