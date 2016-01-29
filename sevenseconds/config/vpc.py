@@ -78,6 +78,7 @@ def configure_vpc(account, region):
 
     nat_instances = create_nat_instances(account, vpc, region)
     create_routing_tables(vpc, nat_instances)
+    create_vpc_endpoints(account, vpc, region)
     return vpc
 
 
@@ -152,6 +153,29 @@ def delete_vpc(vpc: object, region: str):
             network_acl.delete()
         except Exception as e:
             info(e)
+
+    endpoints = vpc.meta.client.describe_vpc_endpoints(
+        Filters=[
+            {
+                'Name': 'vpc-id',
+                'Values': [
+                    vpc.id
+                ]
+            },
+            {
+                'Name': 'vpc-endpoint-state',
+                'Values': [
+                    'pending',
+                    'available'
+                ]
+            }
+        ]
+    )['VpcEndpoints']
+    if endpoints:
+        for endpoint in endpoints:
+            vpc.meta.client.delete_vpc_endpoints(
+                VpcEndpointIds=[endpoint['VpcEndpointId']]
+            )
 
     for route_table in vpc.route_tables.all():
         try:
@@ -359,3 +383,58 @@ def create_routing_tables(vpc: object, nat_instance_by_az: dict):
                                                  **destination)
         with ActionOnExit('Associating route table..'):
             route_table.associate_with_subnet(SubnetId=subnet.id)
+
+
+def create_vpc_endpoints(account: object, vpc: object, region: str):
+    ec2c = account.session.client('ec2', region)
+    router_tables = set([rt.id for rt in vpc.route_tables.all()])
+    service_names = ec2c.describe_vpc_endpoint_services()['ServiceNames']
+
+    for service_name in service_names:
+        if service_name.endswith('.s3'):
+            with ActionOnExit('Checking S3 VPC Endpoints..') as act:
+                endpoints = ec2c.describe_vpc_endpoints(
+                    Filters=[
+                        {
+                            'Name': 'service-name',
+                            'Values': [
+                                service_name
+                            ]
+                        },
+                        {
+                            'Name': 'vpc-id',
+                            'Values': [
+                                vpc.id
+                            ]
+                        },
+                        {
+                            'Name': 'vpc-endpoint-state',
+                            'Values': [
+                                'pending',
+                                'available'
+                            ]
+                        }
+                    ]
+                )['VpcEndpoints']
+                if endpoints:
+                    for endpoint in endpoints:
+                        rt_in_endpoint = set(endpoint['RouteTableIds'])
+                        if rt_in_endpoint != router_tables:
+                            options = {'VpcEndpointId': endpoint['VpcEndpointId']}
+                            if rt_in_endpoint.difference(router_tables):
+                                options['RemoveRouteTableIds'] = list(rt_in_endpoint.difference(router_tables))
+                            if router_tables.difference(rt_in_endpoint):
+                                options['AddRouteTableIds'] = list(router_tables.difference(rt_in_endpoint))
+                            act.warning('missmatch ({} vs. {}), make update: {}'.format(
+                                rt_in_endpoint,
+                                router_tables,
+                                ec2c.modify_vpc_endpoint(**options))
+                            )
+                else:
+                    options = {
+                        'VpcId': vpc.id,
+                        'ServiceName': service_name,
+                        'RouteTableIds': list(router_tables),
+                        'ClientToken': '{}-{}'.format(region, vpc.id)
+                    }
+                    act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
