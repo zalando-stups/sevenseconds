@@ -384,14 +384,19 @@ def create_routing_tables(vpc: object, nat_instance_by_az: dict):
                                          **destination)
 
         with ActionOnExit('Checking route table..') as act:
+            found_default_route = False
             for route in route_table.routes:
                 if route.get('DestinationCidrBlock') == '0.0.0.0/0':
                     if route['State'] == 'blackhole':
                         act.warning('replace route')
                         vpc.meta.client.delete_route(RouteTableId=route_table.id,
                                                      DestinationCidrBlock='0.0.0.0/0')
-                        route_table.create_route(DestinationCidrBlock='0.0.0.0/0',
-                                                 **destination)
+                    else:
+                        found_default_route = True
+            if not found_default_route:
+                act.warning('fix default route')
+                route_table.create_route(DestinationCidrBlock='0.0.0.0/0',
+                                         **destination)
         with ActionOnExit('Associating route table..'):
             route_table.associate_with_subnet(SubnetId=subnet.id)
 
