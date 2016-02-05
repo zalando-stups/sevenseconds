@@ -125,7 +125,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
             if e.response['Error']['Code'] != 'InvalidPermission.Duplicate':
                 raise
 
-    configure_dns_record(account, 'odd-{}'.format(az_name), ip)
+    configure_dns_record(account, 'odd-{}'.format(region), ip)
 
     launch_time = instance.launch_time
     if (not wait_for_ssh_port(ip, 60) and
