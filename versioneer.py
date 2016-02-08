@@ -446,6 +446,7 @@ def run_command(commands, args, cwd=None, verbose=True, hide_stderr=False):
                                          else None))
             break
         except EnvironmentError:
+            raise
             e = sys.exc_info()[1]
             if e.errno == errno.ENOENT:
                 continue
