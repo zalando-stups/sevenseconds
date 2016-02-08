@@ -55,6 +55,10 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
         AWS_PROFILE     Connect to this Profile without SAML
         SSLDIR          Directory with all SSL-Files
     '''
+    if not saml_user:
+        error('SAML User still missing. Please add with --saml-user or use the ENV SAML_USER')
+        return
+
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
     account_names = []
