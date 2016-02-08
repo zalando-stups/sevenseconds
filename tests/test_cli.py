@@ -17,6 +17,7 @@ def test_print_version():
 def test_configure_nonexisting_account(monkeypatch):
     runner = CliRunner()
     config = {'accounts': {}}
+    monkeypatch.delenv('SAML_USER', raising=False)
 
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
@@ -29,6 +30,7 @@ def test_configure_nonexisting_account(monkeypatch):
 def test_configure_nonexisting_multi_account(monkeypatch):
     runner = CliRunner()
     config = {'accounts': {}}
+    monkeypatch.delenv('SAML_USER', raising=False)
 
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
@@ -61,7 +63,7 @@ def test_configure(monkeypatch):
             }]})
     monkeypatch.setattr('boto3.client', lambda *args: myboto3)
     monkeypatch.setattr('keyring.get_password', MagicMock())
-    monkeypatch.delenv('SAML_USER')
+    monkeypatch.delenv('SAML_USER', raising=False)
 
     runner = CliRunner()
 
@@ -88,9 +90,9 @@ def test_configure(monkeypatch):
             yaml.safe_dump(config, fd)
         result = runner.invoke(cli, ['configure', 'config.yaml', 'my*'], catch_exceptions=False)
 
+    assert 'Start configuration of: myaccount, mystaging' in result.output
     assert 'SAML User still missing. Please add with --saml-user or use the ENV SAML_USER' in result.output
     # Supports only SAML Login at the moment
-    # assert 'Start configuration of: myaccount, mystaging' in result.output
     # assert 'Creating VPC for 172.31.0.0/16.. OK' in result.output
     # assert 'Enabling CloudTrail.. OK' in result.output
     assert result.exit_code == 0
