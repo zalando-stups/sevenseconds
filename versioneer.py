@@ -1383,6 +1383,7 @@ def get_versions(verbose=False):
                 print("got version from VCS %s" % ver)
             return ver
         except NotThisMethod:
+            print('error 1386')
             pass
 
     try:
@@ -1392,6 +1393,7 @@ def get_versions(verbose=False):
                 print("got version from parentdir %s" % ver)
             return ver
     except NotThisMethod:
+        print('error 1395')
         pass
 
     if verbose:
