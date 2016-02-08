@@ -10,6 +10,7 @@ import os
 import inspect
 from distutils.cmd import Command
 
+import versioneer
 import setuptools
 from setuptools.command.test import test as TestCommand
 from setuptools import setup
@@ -21,15 +22,9 @@ if sys.version_info < (3, 4, 0):
 __location__ = os.path.join(os.getcwd(), os.path.dirname(inspect.getfile(inspect.currentframe())))
 
 
-def read_version(package):
-    data = {}
-    with open(os.path.join(package, '__init__.py'), 'r') as fd:
-        exec(fd.read(), data)
-    return data['__version__']
-
 NAME = 'stups-sevenseconds'
 MAIN_PACKAGE = 'sevenseconds'
-VERSION = read_version(MAIN_PACKAGE)
+VERSION = versioneer.get_version()
 DESCRIPTION = 'Configure AWS accounts'
 LICENSE = 'Apache License 2.0'
 URL = 'https://github.com/zalando-stups/sevenseconds'
@@ -159,13 +154,10 @@ def read(fname):
 
 def setup_package():
     # Assemble additional setup commands
-    cmdclass = {}
+    cmdclass = versioneer.get_cmdclass()
     cmdclass['docs'] = sphinx_builder()
     cmdclass['doctest'] = sphinx_builder()
     cmdclass['test'] = PyTest
-
-    # Some helper variables
-    version = os.getenv('GO_PIPELINE_LABEL', VERSION)
 
     docs_path = os.path.join(__location__, 'docs')
     docs_build_path = os.path.join(docs_path, '_build')
@@ -173,15 +165,15 @@ def setup_package():
 
     command_options = {'docs': {
         'project': ('setup.py', MAIN_PACKAGE),
-        'version': ('setup.py', version.split('-', 1)[0]),
-        'release': ('setup.py', version),
+        'version': ('setup.py', VERSION.split('-', 1)[0]),
+        'release': ('setup.py', VERSION),
         'build_dir': ('setup.py', docs_build_path),
         'config_dir': ('setup.py', docs_path),
         'source_dir': ('setup.py', docs_path),
     }, 'doctest': {
         'project': ('setup.py', MAIN_PACKAGE),
-        'version': ('setup.py', version.split('-', 1)[0]),
-        'release': ('setup.py', version),
+        'version': ('setup.py', VERSION.split('-', 1)[0]),
+        'release': ('setup.py', VERSION),
         'build_dir': ('setup.py', docs_build_path),
         'config_dir': ('setup.py', docs_path),
         'source_dir': ('setup.py', docs_path),
@@ -196,7 +188,7 @@ def setup_package():
 
     setup(
         name=NAME,
-        version=version,
+        version=VERSION,
         url=URL,
         description=DESCRIPTION,
         author=AUTHOR,
