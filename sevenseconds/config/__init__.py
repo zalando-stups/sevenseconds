@@ -21,18 +21,19 @@ from .securitygroup import configure_security_groups
 from ..helper.threading import ThreadWorker, Queue
 import sevenseconds.helper
 
-AccountData = namedtuple('AccountData',
-                         (
-                            'name',
-                            'alias',
-                            'id',
-                            'session',
-                            'admin_session',
-                            'ami_session',
-                            'config',
-                            'dry_run',
-                            'options'
-                         ))
+AccountData = namedtuple(
+    'AccountData',
+    (
+        'name',
+        'alias',
+        'id',
+        'session',
+        'admin_session',
+        'ami_session',
+        'config',
+        'dry_run',
+        'options'
+    ))
 
 
 def start_configuration(sessions: list, trusted_addresses: set):
