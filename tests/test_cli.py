@@ -11,6 +11,7 @@ def test_print_version():
         result = runner.invoke(cli, ['--version'], catch_exceptions=False)
 
     assert 'AWS Account Configurator' in result.output
+    assert 'unknown' not in result.output
     assert result.exit_code == 0
 
 
