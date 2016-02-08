@@ -1395,10 +1395,10 @@ def get_versions(verbose=False):
         pass
 
     if verbose:
-        print("unable to compute version")
+        print("unable to compute version versioneer verbose")
 
     return {"version": "0+unknown", "full-revisionid": None,
-            "dirty": None, "error": "unable to compute version"}
+            "dirty": None, "error": "unable to compute version versioneer"}
 
 
 def get_version():
