@@ -1,7 +1,7 @@
 from ..helper import ActionOnExit, info
 from ..helper.regioninfo import get_regions
 from ..helper.threading import ThreadWorker, Queue
-
+import sevenseconds.helper
 
 DEFAULT_CLOUDTRAIL_REGION = 'eu-west-1'
 
@@ -36,13 +36,14 @@ def drop_old_cloudtrails(account):
         worker.start()
     # Put the tasks into the queue as a tuple
     for region in regions:
-        queue.put((account.session, region, account.dry_run))
+        queue.put((account, region, account.dry_run))
     queue.join()
 
 
-def drop_old_cloudtrails_worker(session, region, dry_run):
+def drop_old_cloudtrails_worker(account, region, dry_run):
+    sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
     with ActionOnExit('search for old CloudTrail configuration in Region: {}'.format(region)) as act:
-        cloudtrail = session.client('cloudtrail', region)
+        cloudtrail = account.session.client('cloudtrail', region)
         trails = cloudtrail.describe_trails(includeShadowTrails=False)['trailList']
         if trails:
             act.error('found existing config')
@@ -71,7 +72,7 @@ def configure_cloudtrail(account: object):
                   IsMultiRegionTrail=True,
                   IncludeGlobalServiceEvents=True)
     if trail:
-        with ActionOnExit('[{}] Checking CloudTrail in region {}..'.format(account.name, region)) as act:
+        with ActionOnExit('Checking CloudTrail in region {}..'.format(region)) as act:
             if not account.dry_run:
                 if (trail['IncludeGlobalServiceEvents'] != kwargs['IncludeGlobalServiceEvents'] or
                         trail.get('S3KeyPrefix', '') != kwargs['S3KeyPrefix'] or

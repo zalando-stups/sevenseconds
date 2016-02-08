@@ -47,7 +47,7 @@ def configure_account_except(session_data: AccountData, trusted_addresses: set):
 
 def configure_account(session_data: AccountData, trusted_addresses: set):
     start_time = time.time()
-    sevenseconds.helper.PROGNAME = session_data.name
+    sevenseconds.helper.THREADDATA.name = session_data.name
     session = {}
     for session_name in ('session', 'admin_session', 'ami_session'):
         session[session_name] = boto3.session.Session(**getattr(session_data, session_name))
@@ -88,6 +88,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
 
 
 def configure_account_region(account: object, region: str, trusted_addresses: set):
+    sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
     configure_log_group(account.session, region)
     vpc = configure_vpc(account, region)
     configure_bastion_host(account, vpc, region)

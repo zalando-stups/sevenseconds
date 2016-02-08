@@ -4,10 +4,11 @@ from clickclick import secho
 import yaml
 from datetime import timedelta
 import time
+import threading
 
 CONFIG_DIR_PATH = click.get_app_dir('sevenseconds')
-PROGNAME = 'GLOBAL'
 START_TIME = time.time()
+THREADDATA = threading.local()
 
 
 class ActionOnExit:
@@ -55,8 +56,8 @@ class ActionOnExit:
         elapsed_seconds = time.time() - START_TIME
         # using timedelta here for convenient default formatting
         elapsed = timedelta(seconds=elapsed_seconds)
-        print('[{:>15} | {}] {}{}'.format(
-            PROGNAME,
+        print('[{:>25} | {}] {}{}'.format(
+            getattr(THREADDATA, 'name', 'GLOBAL'),
             elapsed,
             self.msg,
             suffix))
@@ -66,7 +67,7 @@ def _secho(msg, **kwargs):
     elapsed_seconds = time.time() - START_TIME
     # using timedelta here for convenient default formatting
     elapsed = timedelta(seconds=elapsed_seconds)
-    secho('[{:>15} | {}] {}'.format(PROGNAME, elapsed, msg), **kwargs)
+    secho('[{:>25} | {}] {}'.format(getattr(THREADDATA, 'name', 'GLOBAL'), elapsed, msg), **kwargs)
 
 
 def error(msg, **kwargs):
