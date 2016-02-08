@@ -5,7 +5,7 @@ import botocore.exceptions
 from itertools import repeat
 import multiprocessing
 from aws_saml_login import authenticate, assume_role, get_boto3_session
-from ..helper import ActionOnExit, error
+from ..helper import ActionOnExit, error, fatal_error
 from ..config import AccountData
 
 
@@ -80,10 +80,12 @@ def get_sessions(account_names: list, saml_user: str, saml_password: str,
             saml_url = cfg.get('saml_identity_provider_url')
             saml_role = cfg.get('saml_admin_login_role')
             account_alias = cfg.get('alias', account_name).format(account_name=account_name)
-            base_ami = cfg.get('base_ami')['account_name']
+            base_ami = cfg.get('base_ami', {}).get('account_name')
             admin_account = cfg.get('admin_account')
             if not admin_account:
-                error('Missing Option "admin_account" please set Account Name for Main-Account!')
+                fatal_error('Missing Option "admin_account" please set Account Name for Main-Account!')
+            if not base_ami:
+                fatal_error('Missing Option "account_name" for base AMI. Please set Account Name for AMI-Account!')
 
             if saml_batch.get(saml_url) is None:
                 saml_batch[saml_url] = {}
