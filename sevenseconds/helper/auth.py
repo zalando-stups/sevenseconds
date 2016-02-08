@@ -65,7 +65,7 @@ def assume_role_worker(batch, roles, saml_xml):
 
 
 def get_sessions(account_names: list, saml_user: str, saml_password: str,
-                 config: dict, accounts: list, dry_run: bool=False):
+                 config: dict, accounts: list, options: dict):
     global_cfg = config.get('global', {})
     sessions_tmp = {}
     saml_batch = {}
@@ -100,15 +100,14 @@ def get_sessions(account_names: list, saml_user: str, saml_password: str,
                 'account_keyname': '{}/{}'.format(account_alias, saml_role),
                 'account_name': account_name,
                 'account_alias': account_alias,
-                'config': cfg,
-                'dry_run': dry_run}
+                'config': cfg}
 
     credentials = get_aws_credentials(saml_batch, saml_user, saml_password)
 
-    return rewrite_sessions_map(sessions_tmp, credentials)
+    return rewrite_sessions_map(sessions_tmp, credentials, options)
 
 
-def rewrite_sessions_map(sessions_tmp, credentials):
+def rewrite_sessions_map(sessions_tmp: dict, credentials: dict, options: dict):
     sessions = {}
     for account_alias in sessions_tmp:
         account_keyname = sessions_tmp[account_alias]['account_keyname']
@@ -122,6 +121,7 @@ def rewrite_sessions_map(sessions_tmp, credentials):
                                                   admin_session=credentials[admin_account_keyname],
                                                   ami_session=credentials[base_ami_account_keyname],
                                                   config=sessions_tmp[account_alias]['config'],
-                                                  dry_run=sessions_tmp[account_alias]['dry_run'])
+                                                  dry_run=options.get('dry_run', False),
+                                                  options=options)
 
     return sessions

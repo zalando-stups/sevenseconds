@@ -2,6 +2,8 @@ import time
 import socket
 import yaml
 import datetime
+import base64
+import difflib
 import botocore.exceptions
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
 from ..helper.aws import filter_subnets, associate_address
@@ -38,6 +40,11 @@ def configure_bastion_host(account: object, vpc: object, region: str):
     else:
         sg = sg[0]
 
+    config = substitute_template_vars(account.config['bastion'].get('ami_config'),
+                                      {'account_name': account.name, 'vpc_net': str(vpc.cidr_block)})
+    user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config)).encode('utf-8')
+    ami_id = get_base_ami_id(account, region)
+
     filters = [
         {'Name': 'tag:Name',
          'Values': [sg_name]},
@@ -45,8 +52,24 @@ def configure_bastion_host(account: object, vpc: object, region: str):
          'Values': ['running', 'pending']},
     ]
     instances = list(vpc.instances.filter(Filters=filters))
-    re_deploy = account.config['bastion'].get('re_deploy')
-    # TODO: drop_bastionhost, if instance older then 40 days
+    re_deploy = account.config['bastion'].get('re_deploy', account.options.get('redeploy_odd_host'))
+
+    for instance in instances:
+        inst_user_data = base64.b64decode(instance.describe_attribute(Attribute='userData')['UserData']['Value'])
+        if instance.image_id != ami_id:
+            error('{} use {} instand of {}.'.format(instance.id, instance.image_id, ami_id))
+            if not re_deploy and account.options.get('update_odd_host'):
+                error(' ==> Make re-deploy')
+                re_deploy = True
+        if inst_user_data != user_data:
+            original = inst_user_data.decode('utf-8')
+            new = user_data.decode('utf-8')
+            diff = difflib.ndiff(original.splitlines(1), new.splitlines(1))
+            error('{} use a different UserData\n{}'.format(instance.id, ''.join(diff)))
+            if not re_deploy and account.options.get('update_odd_host'):
+                error(' ==> Make re-deploy')
+                re_deploy = True
+
     if instances and re_deploy:
         for instance in instances:
             drop_bastionhost(instance)
@@ -57,14 +80,10 @@ def configure_bastion_host(account: object, vpc: object, region: str):
         ip = instance.public_ip_address
     else:
         with ActionOnExit('Launching SSH Bastion instance in {az_name}..', az_name=az_name):
-            config = substitute_template_vars(account.config['bastion'].get('ami_config'),
-                                              {'account_name': account.name, 'vpc_net': str(vpc.cidr_block)})
-            user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config))
-            ami_id = get_base_ami_id(account, region)
             instance = subnet.create_instances(ImageId=ami_id,
                                                InstanceType=account.config['bastion'].get('instance_type', 't2.micro'),
                                                SecurityGroupIds=[sg.id],
-                                               UserData=user_data.encode('utf-8'),
+                                               UserData=user_data,
                                                MinCount=1,
                                                MaxCount=1,
                                                DisableApiTermination=True,
