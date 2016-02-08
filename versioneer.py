@@ -435,6 +435,7 @@ def register_vcs_handler(vcs, method):  # decorator
 
 def run_command(commands, args, cwd=None, verbose=True, hide_stderr=False):
     assert isinstance(commands, list)
+    print('IN run_command: {}'.format(vars()))
     p = None
     for c in commands:
         try:
