@@ -39,7 +39,7 @@ def get_config():
     cfg.tag_prefix = ""
     cfg.parentdir_prefix = "None"
     cfg.versionfile_source = "sevenseconds/_version.py"
-    cfg.verbose = False
+    cfg.verbose = True
     return cfg
 
 
