@@ -1379,13 +1379,14 @@ def get_versions(verbose=False):
         try:
             print('from_vcs_f({}, {}, {}) vars({})'.format(cfg.tag_prefix, root, verbose, vars()))
             pieces = from_vcs_f(cfg.tag_prefix, root, verbose)
+            print('pieces: {}'.format(pieces))
             ver = render(pieces, cfg.style)
             if verbose:
                 print("got version from VCS %s" % ver)
             return ver
         except NotThisMethod:
             print('error 1386')
-            pass
+            raise
 
     try:
         if cfg.parentdir_prefix:
