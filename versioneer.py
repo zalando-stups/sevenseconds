@@ -1377,6 +1377,7 @@ def get_versions(verbose=False):
     from_vcs_f = handlers.get("pieces_from_vcs")
     if from_vcs_f:
         try:
+            print('from_vcs_f({}, {}, {}) vars({})'.format(cfg.tag_prefix, root, verbose, vars()))
             pieces = from_vcs_f(cfg.tag_prefix, root, verbose)
             ver = render(pieces, cfg.style)
             if verbose:
