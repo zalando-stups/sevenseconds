@@ -36,11 +36,19 @@ def destroy(account_name, region):
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name_pattern', nargs=-1)
-@click.option('--saml-user', help='SAML username', envvar='SAML_USER')
+@click.option('--saml-user', help='SAML username', envvar='SAML_USER', metavar='USERNAME')
 @click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
-              envvar='SAML_PASSWORD')
+              envvar='SAML_PASSWORD',
+              metavar='PASSWORD')
 @click.option('--dry-run', is_flag=True)
-def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
+@click.option('--update-odd-host', help='Update old Odd Hosts', is_flag=True)
+@click.option('--redeploy-odd-host', help='Redeploy Odd Hosts (independ of age and status)', is_flag=True)
+@click.option('--migrate2natgateway',
+              help='Drop NAT Instance and create NAT Gateway (NETWORK OUTAGE!)',
+              metavar='<REGEX>')
+@click.option('--migrate2natgateway-if-empty',
+              help='Drop NAT Instance and create NAT Gateway, if no other Instance running', is_flag=True)
+def configure(file, account_name_pattern, saml_user, saml_password, **options):
     '''Configure one or more AWS account(s) matching the provided pattern
 
        ACCOUNT_NAME_PATTERN are Unix shell style:
@@ -77,7 +85,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, dry_run):
         return
 
     info('Start configuration of: {}'.format(', '.join(account_names)))
-    sessions = get_sessions(account_names, saml_user, saml_password, config, accounts, dry_run)
+    sessions = get_sessions(account_names, saml_user, saml_password, config, accounts, options)
     if len(sessions) == 0:
         error('No AWS accounts with login!')
         return

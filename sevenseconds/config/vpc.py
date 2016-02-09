@@ -1,5 +1,6 @@
 import time
 import json
+import re
 from netaddr import IPNetwork
 from ..helper import ActionOnExit, info, warning
 from ..helper.network import calculate_subnet
@@ -265,7 +266,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
             {'Name': 'instance-state-name',
              'Values': ['running', 'pending']},
         ]
-        instances = list(ec2.instances.filter(Filters=filters))
+        instances = list(subnet.instances.filter(Filters=filters))
         nat_gateway = None
         try:
             filters = [
@@ -276,12 +277,10 @@ def create_nat_instances(account: object, vpc: object, region: str):
             support_nat_gateway = True
         except:
             support_nat_gateway = False
-
         if nat_gateway:
             nat_instance_by_az[az_name] = {'NatGatewayId': nat_gateway[0]['NatGatewayId']}
             if nat_gateway[0]['State'] == 'pending':
-                info('Nat Gateway is pending. Skipping subnet..')
-                continue
+                warning('Nat Gateway in {} is pending'.format(az_name))
             ip = [x['PublicIp'] for x in nat_gateway[0]['NatGatewayAddresses']]
         elif instances:
             instance = instances[0]
@@ -295,8 +294,36 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 instance.modify_attribute(SourceDestCheck={'Value': False})
             if support_nat_gateway:
                 # FIXME Add NAT GW Migration
-                warning('Skip migration from NAT Instance to NAT Gateway')
-        else:
+                instance_count = 0
+                all_instance_filters = [
+                    {'Name': 'instance-state-name',
+                     'Values': ['running', 'pending']},
+                ]
+                for inst in subnet.instances.filter(Filters=all_instance_filters):
+                    if get_tag(inst.tags, 'Name') != sg_name or get_tag(inst.tags, 'Name') != 'Odd (SSH Bastion Host)':
+                        instance_count += 1
+                pattern = account.options.get('migrate2natgateway')
+                if isinstance(pattern, str):
+                    if re.fullmatch(pattern, az_name) or re.fullmatch(pattern, region):
+                        with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
+                            instance.modify_attribute(Attribute='disableApiTermination', Value='false')
+                            instance.terminate()
+                            instance.wait_until_terminated()
+                        instances = None
+                        instance = None
+                elif account.options.get('migrate2natgateway_if_empty'):
+                    with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
+                        instance.modify_attribute(Attribute='disableApiTermination', Value='false')
+                        instance.terminate()
+                        instance.wait_until_terminated()
+                    instances = None
+                    instance = None
+                else:
+                    warning('Skip migration from NAT Instance to NAT Gateway in {} (Instance Count: {}'.format(
+                        az_name,
+                        instance_count))
+
+        if not nat_gateway and not instances:
             if support_nat_gateway:
                 with ActionOnExit('Launching NAT Gateway in {az_name}..', **vars()):
                     # create new Nat Gateway if no legacy Nat running
@@ -343,9 +370,10 @@ def create_nat_instances(account: object, vpc: object, region: str):
                     instance.modify_attribute(SourceDestCheck={'Value': False})
                 nat_instance_by_az[az_name] = {'InstanceId': instance.id}
 
-        info('NAT {} {} is running with Elastic IP {}'.format('gateway' if support_nat_gateway else 'instance',
-                                                              az_name,
-                                                              ip))
+        info('NAT {} {} is running with Elastic IP {} ({})'.format('gateway' if support_nat_gateway else 'instance',
+                                                                   az_name,
+                                                                   ip,
+                                                                   nat_instance_by_az[az_name]))
 
         configure_dns_record(account, 'nat-{}'.format(az_name), ip)
     filters = [
@@ -375,7 +403,10 @@ def create_routing_tables(vpc: object, nat_instance_by_az: dict):
             if get_tag(rt.tags, 'Name', 'undef-rt-name') == get_tag(subnet.tags, 'Name', 'undef-subnet-name'):
                 route_table = rt
                 break
-        destination = nat_instance_by_az[subnet.availability_zone]
+        destination = nat_instance_by_az.get(subnet.availability_zone)
+        if destination is None:
+            warning('Skip routing table for {} (no destination)')
+            continue
         if not route_table:
             with ActionOnExit('Creating route table {}..'.format(get_tag(subnet.tags, 'Name'))):
                 route_table = vpc.create_route_table()

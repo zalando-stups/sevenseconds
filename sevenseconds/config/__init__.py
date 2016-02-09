@@ -1,9 +1,3 @@
-
-#     try:
-#         configure_account(account_name, cfg, trusted_addresses, dry_run)
-#     except Exception:
-#         error('Error while configuring {}: {}'.format(account_name, traceback.format_exc()))
-
 import boto3
 from itertools import repeat
 from multiprocessing import Pool
@@ -27,7 +21,19 @@ from .securitygroup import configure_security_groups
 from ..helper.threading import ThreadWorker, Queue
 import sevenseconds.helper
 
-AccountData = namedtuple('AccountData', 'name, alias, id, session, admin_session, ami_session, config, dry_run')
+AccountData = namedtuple(
+    'AccountData',
+    (
+        'name',
+        'alias',
+        'id',
+        'session',
+        'admin_session',
+        'ami_session',
+        'config',
+        'dry_run',
+        'options'
+    ))
 
 
 def start_configuration(sessions: list, trusted_addresses: set):
