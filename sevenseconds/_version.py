@@ -37,7 +37,7 @@ def get_config():
     cfg.VCS = "git"
     cfg.style = "pep440"
     cfg.tag_prefix = ""
-    cfg.parentdir_prefix = "None"
+    cfg.parentdir_prefix = ""
     cfg.versionfile_source = "sevenseconds/_version.py"
     cfg.verbose = False
     return cfg
