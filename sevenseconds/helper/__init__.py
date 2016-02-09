@@ -9,6 +9,8 @@ import threading
 CONFIG_DIR_PATH = click.get_app_dir('sevenseconds')
 START_TIME = time.time()
 THREADDATA = threading.local()
+PATTERNLENGTH = 25
+QUITE = False
 
 
 class ActionOnExit:
@@ -19,7 +21,8 @@ class ActionOnExit:
         self._suppress_exception = False
         self.ok_msg = ' OK'
         self.call_time = time.time()
-        self._print(' ...')
+        if not QUITE:
+            self._print(' ...')
 
     def __enter__(self):
         return self
@@ -30,7 +33,8 @@ class ActionOnExit:
                 self.msg += click.style(' {}'.format(self.ok_msg), fg='green', bold=True)
         elif not self._suppress_exception:
             self.msg += click.style(' EXCEPTION OCCURRED: {}'.format(exc_val), fg='red', bold=True)
-        self._print(' +{:.6f}s'.format(time.time() - self.call_time))
+        if not QUITE or self.errors:
+            self._print(' +{:.6f}s'.format(time.time() - self.call_time))
 
     def fatal_error(self, msg, **kwargs):
         self._suppress_exception = True  # Avoid printing "EXCEPTION OCCURRED: -1" on exit
@@ -56,8 +60,8 @@ class ActionOnExit:
         elapsed_seconds = time.time() - START_TIME
         # using timedelta here for convenient default formatting
         elapsed = timedelta(seconds=elapsed_seconds)
-        print('[{:>25} | {}] {}{}'.format(
-            getattr(THREADDATA, 'name', 'GLOBAL'),
+        print('[{} | {}] {}{}'.format(
+            getattr(THREADDATA, 'name', 'GLOBAL').rjust(PATTERNLENGTH),
             elapsed,
             self.msg,
             suffix))
@@ -67,7 +71,7 @@ def _secho(msg, **kwargs):
     elapsed_seconds = time.time() - START_TIME
     # using timedelta here for convenient default formatting
     elapsed = timedelta(seconds=elapsed_seconds)
-    secho('[{:>25} | {}] {}'.format(getattr(THREADDATA, 'name', 'GLOBAL'), elapsed, msg), **kwargs)
+    secho('[{} | {}] {}'.format(getattr(THREADDATA, 'name', 'GLOBAL').rjust(PATTERNLENGTH), elapsed, msg), **kwargs)
 
 
 def error(msg, **kwargs):
@@ -80,7 +84,8 @@ def fatal_error(msg, **kwargs):
 
 
 def ok(msg=' OK', **kwargs):
-    _secho(msg, fg='green', bold=True, **kwargs)
+    if not QUITE:
+        _secho(msg, fg='green', bold=True, **kwargs)
 
 
 def warning(msg, **kwargs):
@@ -88,7 +93,8 @@ def warning(msg, **kwargs):
 
 
 def info(msg):
-    _secho(msg, fg='blue', bold=True)
+    if not QUITE:
+        _secho(msg, fg='blue', bold=True)
 
 
 def substitute_template_vars(data, context: dict):

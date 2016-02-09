@@ -41,6 +41,10 @@ def destroy(account_name, region):
               envvar='SAML_PASSWORD',
               metavar='PASSWORD')
 @click.option('--dry-run', is_flag=True)
+@click.option('-P', '--max-procs',
+              help='Run  up  to  max-procs processes at a time. Default CPU Count',
+              default=os.cpu_count(),
+              type=click.INT)
 @click.option('--update-odd-host', help='Update old Odd Hosts', is_flag=True)
 @click.option('--redeploy-odd-host', help='Redeploy Odd Hosts (independ of age and status)', is_flag=True)
 @click.option('--migrate2natgateway',
@@ -48,6 +52,10 @@ def destroy(account_name, region):
               metavar='<REGEX>')
 @click.option('--migrate2natgateway-if-empty',
               help='Drop NAT Instance and create NAT Gateway, if no other Instance running', is_flag=True)
+@click.option('--login-only',
+              help='exit afert Login', is_flag=True)
+@click.option('--quite',
+              help='log only errors', is_flag=True)
 def configure(file, account_name_pattern, saml_user, saml_password, **options):
     '''Configure one or more AWS account(s) matching the provided pattern
 
@@ -79,6 +87,8 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
     if not account_names:
         error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
         return
+    sevenseconds.helper.PATTERNLENGTH = max([len(x) for x in account_names]) + 14
+    sevenseconds.helper.QUITE = options.get('quite', False)
 
     info('Start configuration of: {}'.format(', '.join(account_names)))
 
@@ -90,9 +100,11 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
     if len(sessions) == 0:
         error('No AWS accounts with login!')
         return
+    if options.get('login_only'):
+        return
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
     trusted_addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
-    start_configuration(sessions, trusted_addresses)
+    start_configuration(sessions, trusted_addresses, options)
 
 
 @cli.command()

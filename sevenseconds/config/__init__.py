@@ -1,4 +1,5 @@
 import boto3
+import os
 from itertools import repeat
 from multiprocessing import Pool
 import traceback
@@ -36,11 +37,11 @@ AccountData = namedtuple(
     ))
 
 
-def start_configuration(sessions: list, trusted_addresses: set):
+def start_configuration(sessions: list, trusted_addresses: set, options: dict):
     info('Start Pool processing...')
-    with Pool() as pool:
+    with Pool(processes=options.get('max_procs', os.cpu_count())) as pool:
         pool.starmap(configure_account_except, zip(sessions.values(), repeat(trusted_addresses)))
-    info('Pool processing done...')
+    info('Pool processing done... ')
 
 
 def configure_account_except(session_data: AccountData, trusted_addresses: set):

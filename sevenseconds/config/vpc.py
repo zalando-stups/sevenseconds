@@ -311,14 +311,19 @@ def create_nat_instances(account: object, vpc: object, region: str):
                             instance.wait_until_terminated()
                         instances = None
                         instance = None
-                elif account.options.get('migrate2natgateway_if_empty') and instance_count == 0:
-                    with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
-                        instance.modify_attribute(Attribute='disableApiTermination', Value='false')
-                        instance.terminate()
-                        instance.wait_until_terminated()
-                    instances = None
-                    instance = None
-                else:
+                elif account.options.get('migrate2natgateway_if_empty'):
+                    if instance_count == 0:
+                        with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
+                            instance.modify_attribute(Attribute='disableApiTermination', Value='false')
+                            instance.terminate()
+                            instance.wait_until_terminated()
+                        instances = None
+                        instance = None
+                    else:
+                        warning('Skip migration from NAT Instance to NAT Gateway in {} (Instance Count: {})'.format(
+                            az_name,
+                            instance_count))
+                elif instance_count == 0:
                     warning('Skip migration from NAT Instance to NAT Gateway in {} (Instance Count: {})'.format(
                         az_name,
                         instance_count))
