@@ -238,6 +238,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
     nat_instance_by_az = {}
+    nat_type = None
     for subnet in filter_subnets(vpc, 'dmz'):
         az_name = subnet.availability_zone
 
@@ -271,20 +272,28 @@ def create_nat_instances(account: object, vpc: object, region: str):
         try:
             filters = [
                 {'Name': 'subnet-id', 'Values': [subnet.id]},
-                {'Name': 'state', 'Values': ['pending', 'available']}
+                {'Name': 'state', 'Values': ['pending', 'available', 'deleting']}
             ]
             nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
             support_nat_gateway = True
         except:
             support_nat_gateway = False
+        while len(nat_gateway) and nat_gateway[0]['State'] == 'deleting':
+            warning('Nat Gateway in {} is deleting.. waiting..'.format(az_name))
+            time.sleep(10)
+            nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
         if nat_gateway:
             nat_instance_by_az[az_name] = {'NatGatewayId': nat_gateway[0]['NatGatewayId']}
-            if nat_gateway[0]['State'] == 'pending':
-                warning('Nat Gateway in {} is pending'.format(az_name))
+            nat_type = 'gateway'
+            while nat_gateway[0]['State'] == 'pending':
+                warning('Nat Gateway in {} is pending.. waiting..'.format(az_name))
+                time.sleep(10)
+                nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
             ip = [x['PublicIp'] for x in nat_gateway[0]['NatGatewayAddresses']]
         elif instances:
             instance = instances[0]
             nat_instance_by_az[az_name] = {'InstanceId': instance.id}
+            nat_type = 'instance'
             ip = instance.public_ip_address
             if ip is None:
                 with ActionOnExit('Associating Elastic IP..'):
@@ -296,11 +305,13 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 # FIXME Add NAT GW Migration
                 instance_count = 0
                 all_instance_filters = [
+                    {'Name': 'availability-zone',
+                     'Values': [az_name]},
                     {'Name': 'instance-state-name',
                      'Values': ['running', 'pending']},
                 ]
-                for inst in subnet.instances.filter(Filters=all_instance_filters):
-                    if get_tag(inst.tags, 'Name') != sg_name or get_tag(inst.tags, 'Name') != 'Odd (SSH Bastion Host)':
+                for inst in ec2.instances.filter(Filters=all_instance_filters):
+                    if get_tag(inst.tags, 'Name') != sg_name and get_tag(inst.tags, 'Name') != 'Odd (SSH Bastion Host)':
                         instance_count += 1
                 pattern = account.options.get('migrate2natgateway')
                 if isinstance(pattern, str):
@@ -340,6 +351,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
                     )
                     info(response)
                     nat_instance_by_az[az_name] = {'NatGatewayId': response['NatGateway']['NatGatewayId']}
+                    nat_type = 'gateway'
             else:
                 with ActionOnExit('Launching NAT instance in {az_name}..', **vars()):
                     filters = [
@@ -374,8 +386,9 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 with ActionOnExit('Disabling source/destination checks..'):
                     instance.modify_attribute(SourceDestCheck={'Value': False})
                 nat_instance_by_az[az_name] = {'InstanceId': instance.id}
+                nat_type = 'instance'
 
-        info('NAT {} {} is running with Elastic IP {} ({})'.format('gateway' if support_nat_gateway else 'instance',
+        info('NAT {} {} is running with Elastic IP {} ({})'.format(nat_type,
                                                                    az_name,
                                                                    ip,
                                                                    nat_instance_by_az[az_name]))

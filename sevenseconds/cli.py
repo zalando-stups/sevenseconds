@@ -8,6 +8,7 @@ from clickclick import AliasedGroup
 from .helper import error, info
 from .helper.auth import get_sessions
 from .helper.network import get_trusted_addresses
+from .helper.regioninfo import get_regions
 from .config import start_configuration
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
@@ -87,7 +88,10 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
     if not account_names:
         error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
         return
-    sevenseconds.helper.PATTERNLENGTH = max([len(x) for x in account_names]) + 14
+
+    account_name_length = max([len(x) for x in account_names])
+    region_name_length = max([len(x) for x in get_regions('cloudtrail')])
+    sevenseconds.helper.PATTERNLENGTH = account_name_length + region_name_length + 2
     sevenseconds.helper.QUITE = options.get('quite', False)
 
     info('Start configuration of: {}'.format(', '.join(account_names)))
