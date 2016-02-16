@@ -56,6 +56,7 @@ def configure_vpc(account, region):
             vpc.modify_attribute(EnableDnsSupport={'Value': True})
             vpc.modify_attribute(EnableDnsHostnames={'Value': True})
     info(vpc)
+    # FIXME check and add Expire for Flow Logs
     with ActionOnExit('Check Flow Logs') as act:
         if not exist_flowlog(account.session, region, vpc.id):
             ec2c.create_flow_logs(ResourceIds=[vpc.id],
@@ -237,6 +238,7 @@ def find_subnet(vpc: object, cidr):
 def create_nat_instances(account: object, vpc: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
+    logs = account.session.client('logs', region)
     nat_instance_by_az = {}
     nat_type = None
     for subnet in filter_subnets(vpc, 'dmz'):
@@ -265,7 +267,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
             {'Name': 'tag:Name',
              'Values': [sg_name]},
             {'Name': 'instance-state-name',
-             'Values': ['running', 'pending']},
+             'Values': ['running', 'pending', 'stopping', 'stopped', 'shutting-down']},
         ]
         instances = list(subnet.instances.filter(Filters=filters))
         nat_gateway = None
@@ -289,26 +291,30 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 warning('Nat Gateway in {} is pending.. waiting..'.format(az_name))
                 time.sleep(10)
                 nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
-            ip = [x['PublicIp'] for x in nat_gateway[0]['NatGatewayAddresses']]
+            ip = nat_gateway[0]['NatGatewayAddresses'][0].get('PublicIp')
+            private_ip = nat_gateway[0]['NatGatewayAddresses'][0].get('PrivateIp')
+            network_interface_id = nat_gateway[0]['NatGatewayAddresses'][0].get('NetworkInterfaceId')
         elif instances:
             instance = instances[0]
             nat_instance_by_az[az_name] = {'InstanceId': instance.id}
             nat_type = 'instance'
             ip = instance.public_ip_address
+            private_ip = instance.private_ip_address
+            network_interface_id = instance.network_interfaces[0].id
             if ip is None:
                 with ActionOnExit('Associating Elastic IP..'):
                     ip = associate_address(ec2c, instance.id)
 
             with ActionOnExit('Disabling source/destination checks..'):
                 instance.modify_attribute(SourceDestCheck={'Value': False})
+
             if support_nat_gateway:
-                # FIXME Add NAT GW Migration
                 instance_count = 0
                 all_instance_filters = [
                     {'Name': 'availability-zone',
                      'Values': [az_name]},
                     {'Name': 'instance-state-name',
-                     'Values': ['running', 'pending']},
+                     'Values': ['running', 'pending', 'stopping', 'stopped', 'shutting-down']},
                 ]
                 for inst in ec2.instances.filter(Filters=all_instance_filters):
                     if get_tag(inst.tags, 'Name') != sg_name and get_tag(inst.tags, 'Name') != 'Odd (SSH Bastion Host)':
@@ -316,18 +322,17 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 pattern = account.options.get('migrate2natgateway')
                 if isinstance(pattern, str):
                     if re.fullmatch(pattern, az_name) or re.fullmatch(pattern, region):
-                        with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
-                            instance.modify_attribute(Attribute='disableApiTermination', Value='false')
-                            instance.terminate()
-                            instance.wait_until_terminated()
+                        terminitate_nat_instance(instance, az_name)
                         instances = None
                         instance = None
+                elif instance.state.get('Name') in ('stopping', 'stopped', 'shutting-down'):
+                    warning('NAT Instance ({} in {}) are down. Terminate for Migration...'.format(instance.id, az_name))
+                    terminitate_nat_instance(instance, az_name)
+                    instances = None
+                    instance = None
                 elif account.options.get('migrate2natgateway_if_empty'):
                     if instance_count == 0:
-                        with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
-                            instance.modify_attribute(Attribute='disableApiTermination', Value='false')
-                            instance.terminate()
-                            instance.wait_until_terminated()
+                        terminitate_nat_instance(instance, az_name)
                         instances = None
                         instance = None
                     else:
@@ -378,6 +383,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
                     waiter.wait(InstanceIds=[instance.id])
                     instance.create_tags(Tags=[{'Key': 'Name', 'Value': sg_name}])
                     ip = None
+                    # FIXME activate Autorecovery !!
 
                 if ip is None:
                     with ActionOnExit('Associating Elastic IP..'):
@@ -387,6 +393,34 @@ def create_nat_instances(account: object, vpc: object, region: str):
                     instance.modify_attribute(SourceDestCheck={'Value': False})
                 nat_instance_by_az[az_name] = {'InstanceId': instance.id}
                 nat_type = 'instance'
+
+        if ip is not None and private_ip is not None and network_interface_id is not None:
+            for direction in ('IN', 'OUT'):
+                for filter_type in ('packets', 'bytes'):
+                    filter_name = 'NAT-{}-{}-{}'.format(az_name, direction, filter_type)
+                    with ActionOnExit('put metric filter for {}..'.format(filter_name)) as act:
+                        filter_pattern = '[version, accountid, interfaceid={}, '.format(network_interface_id)
+                        local_net_pattern = '.'.join(private_ip.split('.')[:1])
+                        if direction == 'IN':
+                            filter_pattern += 'srcaddr!={}.*, dstaddr={}, '.format(local_net_pattern, private_ip)
+                        else:
+                            filter_pattern += 'dstaddr={}, srcaddr!={}.*, '.format(private_ip, local_net_pattern)
+                        filter_pattern += 'srcport, dstport, protocol, packets, bytes, start, end, action, log_status]'
+                        response = logs.put_metric_filter(
+                            logGroupName='vpc-flowgroup',
+                            filterName=filter_name,
+                            filterPattern=filter_pattern,
+                            metricTransformations=[
+                                {
+                                    'metricName': filter_name,
+                                    'metricNamespace': 'NAT',
+                                    'metricValue': '${}'.format(filter_type)
+                                },
+                            ]
+                        )
+                        if (not isinstance(response, dict) or
+                                response.get('ResponseMetadata', {}).get('HTTPStatusCode') != 200):
+                            act.error(response)
 
         info('NAT {} {} is running with Elastic IP {} ({})'.format(nat_type,
                                                                    az_name,
@@ -404,6 +438,13 @@ def create_nat_instances(account: object, vpc: object, region: str):
                 time.sleep(15)
 
     return nat_instance_by_az
+
+
+def terminitate_nat_instance(instance, az_name):
+    with ActionOnExit('Terminating NAT Instance for migration in {}..'.format(az_name)):
+        instance.modify_attribute(Attribute='disableApiTermination', Value='false')
+        instance.terminate()
+        instance.wait_until_terminated()
 
 
 def create_routing_tables(vpc: object, nat_instance_by_az: dict):

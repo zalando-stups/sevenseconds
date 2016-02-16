@@ -93,6 +93,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
             waiter.wait(InstanceIds=[instance.id])
             instance.create_tags(Tags=[{'Key': 'Name', 'Value': sg_name}])
             ip = None
+            # FIXME activate Autorecovery !!
 
     if ip is None:
         with ActionOnExit('Associating Elastic IP to {}..'.format(instance.id)):
