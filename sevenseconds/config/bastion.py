@@ -5,6 +5,7 @@ import datetime
 import base64
 import difflib
 import botocore.exceptions
+import requests
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
 from ..helper.aws import filter_subnets, associate_address
 from .ami import get_base_ami_id
@@ -40,8 +41,21 @@ def configure_bastion_host(account: object, vpc: object, region: str):
     else:
         sg = sg[0]
 
-    config = substitute_template_vars(account.config['bastion'].get('ami_config'),
-                                      {'account_name': account.name, 'vpc_net': str(vpc.cidr_block)})
+    if account.config['bastion'].get('version_url'):
+        with ActionOnExit('Get last Tag for Bastion Image...') as act:
+            r = requests.get(account.config['bastion'].get('version_url'))
+            if r.status_code != 200:
+                act.error('Error code: {}'.format(r.status_code))
+                act.error('Error msg: {}'.format(r.text))
+                return
+            tags = sorted(r.json(), key=lambda x: x['created'], reverse=True)
+            config = substitute_template_vars(account.config['bastion'].get('ami_config'),
+                                              {'account_name': account.name,
+                                               'vpc_net': str(vpc.cidr_block),
+                                               'version': tags[0]['name']})
+    else:
+        config = substitute_template_vars(account.config['bastion'].get('ami_config'),
+                                          {'account_name': account.name, 'vpc_net': str(vpc.cidr_block)})
     user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config)).encode('utf-8')
     ami_id = get_base_ami_id(account, region)
 

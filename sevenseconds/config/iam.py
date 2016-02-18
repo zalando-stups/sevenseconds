@@ -2,7 +2,7 @@ import os
 import gnupg
 import json
 import requests
-from ..helper import fatal_error, info, ActionOnExit
+from ..helper import fatal_error, info, ActionOnExit, error
 
 
 def configure_iam(account: object, dns_domain: str):
@@ -64,8 +64,12 @@ def configure_iam_saml(account: object):
         else:
             with ActionOnExit('Creating SAML provider {name}..', **vars()):
                 r = requests.get(url)
-                saml_metadata_document = r.text
-                iam.create_saml_provider(SAMLMetadataDocument=saml_metadata_document, Name=name)
+                if r.status_code == 200:
+                    saml_metadata_document = r.text
+                    iam.create_saml_provider(SAMLMetadataDocument=saml_metadata_document, Name=name)
+                else:
+                    error('Error code: {}'.format(r.status_code))
+                    error('Error msg: {}'.format(r.text))
 
 
 def configure_iam_certificate(session, dns_domain: str):
