@@ -23,9 +23,12 @@ def configure_elasticache(session, region, vpc):
                     SubnetIds=subnet_ids
                 )
     except:
-        with ActionOnExit('Creating ElastiCache subnet group..'):
-            client.create_cache_subnet_group(
-                CacheSubnetGroupName='internal',
-                CacheSubnetGroupDescription='Default subnet group using all internal subnets',
-                SubnetIds=subnet_ids
-            )
+        with ActionOnExit('Creating ElastiCache subnet group..') as act:
+            try:
+                client.create_cache_subnet_group(
+                    CacheSubnetGroupName='internal',
+                    CacheSubnetGroupDescription='Default subnet group using all internal subnets',
+                    SubnetIds=subnet_ids
+                )
+            except Exception as e:
+                act.error(e)

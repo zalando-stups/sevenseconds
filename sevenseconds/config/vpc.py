@@ -243,7 +243,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
     nat_type = None
     for subnet in filter_subnets(vpc, 'dmz'):
         az_name = subnet.availability_zone
-
+        private_ip = None
         sg_name = 'NAT {}'.format(az_name)
         # GroupNames-Filter: EC2-Classic and default VPC only
         sg = [x for x in vpc.security_groups.all() if x.group_name == sg_name]
