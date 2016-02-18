@@ -44,7 +44,9 @@ def configure_vpc(account, region):
     with ActionOnExit('Updating VPC..'):
         if not account.dry_run:
             ami_id = get_base_ami_id(account, region)
-            tags = [{'Key': 'Name', 'Value': '{}-{}'.format(account.name, region)}]
+            tags = [{'Key': 'Name', 'Value': '{}-{}'.format(account.name, region)},
+                    {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+                    ]
             for key, val in account.config.get('vpc', {}).get('tags', {}).items():
                 tags.append({
                     'Key': key,
