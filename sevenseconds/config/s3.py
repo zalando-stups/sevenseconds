@@ -6,7 +6,7 @@ def configure_s3_buckets(account: object):
     for _, config in account.config.get('s3_buckets', {}).items():
         for region in config.get('regions', []):
             bucket_name = config['name'].format(account_id=account.id, region=region)
-            s3 = account.session.resource('s3')
+            s3 = account.session.resource('s3', region)
             with ActionOnExit('Checking S3 bucket {}..'.format(bucket_name)) as act:
                 bucket = s3.Bucket(bucket_name)
                 try:
