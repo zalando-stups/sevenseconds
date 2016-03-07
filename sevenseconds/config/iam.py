@@ -32,7 +32,7 @@ def configure_iam_policy(account: object):
                 act.error('Failed')
 
         try:
-            iam.Role(role_name).role_name
+            iam.Role(role_name).arn
         except:
             with ActionOnExit('Creating role {role_name}..', **vars()):
                 policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
