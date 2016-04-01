@@ -478,8 +478,8 @@ def create_routing_tables(vpc: object, nat_instance_by_az: dict):
         with ActionOnExit('Checking route table..') as act:
             found_default_route = False
             for route in route_table.routes:
-                if route.get('DestinationCidrBlock') == '0.0.0.0/0':
-                    if route['State'] == 'blackhole':
+                if route.destination_cidr_block == '0.0.0.0/0':
+                    if route.state == 'blackhole':
                         act.warning('replace route')
                         vpc.meta.client.delete_route(RouteTableId=route_table.id,
                                                      DestinationCidrBlock='0.0.0.0/0')
