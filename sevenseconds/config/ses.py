@@ -15,5 +15,4 @@ def configure_ses(account: object, dns_domain):
 def verify_domain(account: object, dns_domain):
     ses = account.session.client('ses', 'eu-west-1')
     verification_token = '"{}"'.format(ses.verify_domain_identity(Domain=dns_domain)['VerificationToken'])
-    verification_dns_name = '_amazonses.{}'.format(dns_domain)
-    configure_dns_record(account, verification_dns_name, verification_token, type='TXT')
+    configure_dns_record(account, '_amazonses', verification_token, type='TXT')

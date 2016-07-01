@@ -96,7 +96,7 @@ def configure_dns_record(account, hostname, value, type='A'):
             response = route53.change_resource_record_sets(
                 HostedZoneId=zone_id,
                 ChangeBatch={
-                    'Comment': 'DNS Entry for NAT Instance/Gateway',
+                    'Comment': 'DNS Entry for {}'.format(hostname),
                     'Changes': [
                         {
                             'Action': 'UPSERT',
