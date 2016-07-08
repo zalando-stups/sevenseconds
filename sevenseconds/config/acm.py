@@ -24,11 +24,11 @@ def configure_acm(account: object, region):
                 if cert['Status'] == 'PENDING_VALIDATION':
                     with ActionOnExit('Certificate {} still Pending. Resend Validation...'
                                       .format(cert['CertificateArn'])):
-                        for d, v in domains.items():
+                        for d in cert["DomainValidationOptions"]:
                             acm.resend_validation_email(
                                 CertificateArn=cert['CertificateArn'],
-                                Domain=d,
-                                ValidationDomain=v
+                                Domain=d["DomainName"],
+                                ValidationDomain=d["ValidationDomain"]
                             )
                 domain_options = {}
                 for options in cert['DomainValidationOptions']:
