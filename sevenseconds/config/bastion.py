@@ -136,6 +136,8 @@ def configure_bastion_host(account: object, vpc: object, region: str):
         ('tcp', 0, 65535, vpc.cidr_block),
         # allow HTTPS to the internet (actually only needed for SSH access service)
         ('tcp', 443, 443, '0.0.0.0/0'),
+        # allow PostgreSQL to the internet (actually only needed for DBaaS)
+        ('tcp', 5432, 5432, '0.0.0.0/0'),
         # allow pings
         ('icmp', -1, -1, '0.0.0.0/0'),
         # allow DNS
