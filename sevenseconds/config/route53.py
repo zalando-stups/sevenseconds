@@ -38,13 +38,7 @@ def configure_dns(account: object):
 
 def configure_dns_delegation(admin_session, domain, nameservers):
     route53 = admin_session.client('route53')
-    result = route53.list_hosted_zones()
-    hosted_zones = result['HostedZones']
-    while result['IsTruncated']:
-        result = route53.list_hosted_zones(Marker=result['NextMarker'])
-        hosted_zones.extend(result['HostedZones'])
-
-    zone_id = find_zoneid(domain, hosted_zones)
+    zone_id = find_zoneid(domain, route53)
     if zone_id:
         response = route53.change_resource_record_sets(
             HostedZoneId=zone_id,
@@ -71,6 +65,23 @@ def configure_dns_delegation(admin_session, domain, nameservers):
         error('Can\'t find any Zone for {}'. format(domain))
 
 
+def get_dns_record(account, dnsname, record_type='A'):
+    route53 = account.session.client('route53')
+    zone_id = find_zoneid(dnsname, route53)
+    if not zone_id:
+        return
+    result = route53.list_resource_record_sets(HostedZoneId=zone_id,
+                                               StartRecordType=record_type,
+                                               StartRecordName=dnsname,
+                                               MaxItems='1')['ResourceRecordSets'][0]
+    if not result:
+        return
+    if result['Name'] == dnsname and result['Type'] == record_type:
+        return result
+    else:
+        return
+
+
 def configure_dns_record(account, hostname, value, type='A'):
     if isinstance(value, list):
         values = value
@@ -80,18 +91,12 @@ def configure_dns_record(account, hostname, value, type='A'):
     dns_domain = account.config.get('domain').format(account_name=account.name)
     domain = '.'.join([hostname, dns_domain])
     with ActionOnExit('Adding DNS record {}: {}'.format(domain, values)) as act:
-        result = route53.list_hosted_zones()
-        hosted_zones = result['HostedZones']
-        while result['IsTruncated']:
-            result = route53.list_hosted_zones(Marker=result['NextMarker'])
-            hosted_zones.extend(result['HostedZones'])
-
-        zone_id = find_zoneid(domain, hosted_zones)
+        zone_id = find_zoneid(domain, route53)
         if zone_id:
             response = route53.change_resource_record_sets(
                 HostedZoneId=zone_id,
                 ChangeBatch={
-                    'Comment': 'DNS Entry for NAT Instance/Gateway',
+                    'Comment': 'DNS Entry for {}'.format(hostname),
                     'Changes': [
                         {
                             'Action': 'UPSERT',
@@ -113,7 +118,13 @@ def configure_dns_record(account, hostname, value, type='A'):
             act.error('Can\'t find any Zone for {}'. format(domain))
 
 
-def find_zoneid(domain: str, hosted_zones: list):
+def find_zoneid(domain: str, route53: object):
+    result = route53.list_hosted_zones()
+    hosted_zones = result['HostedZones']
+    while result['IsTruncated']:
+        result = route53.list_hosted_zones(Marker=result['NextMarker'])
+        hosted_zones.extend(result['HostedZones'])
+
     while domain != '':
         id = [x['Id'] for x in hosted_zones if x['Name'] == domain + '.']
         if not id:

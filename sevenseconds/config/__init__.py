@@ -11,6 +11,8 @@ from ..helper.aws import get_account_id, get_account_alias
 from .policysimulator import check_policy_simulator
 from .cloudtrail import configure_cloudtrail_all_regions
 from .route53 import configure_dns
+from .acm import configure_acm
+from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .cloudwatch import configure_log_group
@@ -77,6 +79,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     dns_domain = configure_dns(account)
     configure_iam(account, dns_domain)
     configure_s3_buckets(account)
+    configure_ses(account, dns_domain)
 
     regions = account.config['regions']
     # Create a queue to communicate with the worker threads
@@ -97,6 +100,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
 def configure_account_region(account: object, region: str, trusted_addresses: set):
     sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
     configure_log_group(account.session, region)
+    configure_acm(account, region)
     vpc = configure_vpc(account, region)
     configure_bastion_host(account, vpc, region)
     configure_elasticache(account.session, region, vpc)

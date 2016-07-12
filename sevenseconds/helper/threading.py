@@ -1,4 +1,5 @@
-from queue import Queue  # noqa (reexport)
+# Re-export Queue
+from queue import Queue  # noqa
 from threading import Thread
 import traceback
 from ..helper import error
