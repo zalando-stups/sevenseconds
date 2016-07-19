@@ -198,7 +198,6 @@ def wait_for_ssh_port(host: str, timeout: int):
 
 def delete_bastion_host(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
-    availability_zones = get_az_names(account.session, region)
     for instance in ec2.instances.all():
         if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
             if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
