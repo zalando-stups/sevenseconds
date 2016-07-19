@@ -7,7 +7,7 @@ import difflib
 import botocore.exceptions
 import requests
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
-from ..helper.aws import filter_subnets, associate_address, get_az_names, get_tag
+from ..helper.aws import filter_subnets, associate_address, get_tag
 from .ami import get_base_ami_id
 from .route53 import configure_dns_record, delete_dns_record
 
