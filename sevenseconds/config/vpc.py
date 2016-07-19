@@ -6,7 +6,9 @@ from ..helper import ActionOnExit, info, warning
 from ..helper.network import calculate_subnet
 from ..helper.aws import filter_subnets, get_tag, get_az_names, associate_address
 from .ami import get_base_ami_id
-from .route53 import configure_dns_record
+from .route53 import configure_dns_record, delete_dns_record
+from clickclick import OutputFormat
+from clickclick.console import print_table
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 
@@ -546,3 +548,113 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                         'ClientToken': '{}-{}'.format(region, vpc.id)
                     }
                     act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
+
+
+def if_vpc_empty(account: object, region: str):
+    ec2 = account.session.resource('ec2', region)
+    ec2c = account.session.client('ec2', region)
+    def instance_state(instance_id):
+        if instance_id:
+            return ec2.Instance(id=instance_id).state.get('Name')
+
+    def if_stups_tool(ni: dict):
+        instance_id = ni.get('Attachment', {}).get('InstanceId')
+        if instance_id:
+            instance = ec2.Instance(id=instance_id)
+            availability_zones = get_az_names(account.session, region)
+            if get_tag(instance.tags, 'Name') in ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones]):
+                return True
+        allocation_id = ni.get('Association', {}).get('AllocationId')
+        if allocation_id:
+            for gateway in ec2c.describe_nat_gateways()['NatGateways']:
+                if gateway.get('NatGatewayAddresses', {})[0].get('AllocationId') == allocation_id:
+                    return True
+        return False
+
+    account_is_free = True
+    rows = []
+    for ni in ec2c.describe_network_interfaces()['NetworkInterfaces']:
+        can_remove = if_stups_tool(ni)
+        if not can_remove:
+            account_is_free = False
+        # print(' '.join([str(ni), str(ni.groups), str(ni.attachment), ni.description]))
+        rows.append({'network_id': ni.get('NetworkInterfaceId'),
+                     'group_name': ', '.join([group['GroupName'] for group in ni.get('Groups')]),
+                     'description': ni.get('Description'),
+                     'status': ni.get('Attachment', {}).get('Status'),
+                     'instance_owner_id': ni.get('Attachment', {}).get('InstanceOwnerId'),
+                     'instance_id': ni.get('Attachment', {}).get('InstanceId', ''),
+                     'state': instance_state(ni.get('Attachment', {}).get('InstanceId')),
+                     'allocation_id': ni.get('Association', {}).get('AllocationId'),
+                     'account_name': account.name,
+                     'can_remove': '✔' if can_remove else '✘'
+
+                     })
+    rows.sort(key=lambda x: (x['account_name'], x['group_name'], x['instance_id']))
+    with OutputFormat('text'):
+        print_table('''
+                    can_remove
+                    account_name
+                    network_id
+                    allocation_id
+                    description
+                    group_name
+                    status
+                    instance_owner_id
+                    instance_id state
+                    '''.split(),
+                    rows,
+                    styles={
+                                'running': {'fg': 'green'},
+                                'stopped': {'fg': 'red', 'bold': True},
+                                '✔': {'bg': 'green'},
+                                '✘': {'bg': 'red', 'bold': True},
+                            })
+
+    return account_is_free
+
+
+def cleanup_vpc(account: object, region: str):
+    ec2 = account.session.resource('ec2', region)
+    ec2c = account.session.client('ec2', region)
+
+    from pprint import pprint
+    with ActionOnExit('Delete Nat Gateways..') as act:
+        for gateway in ec2c.describe_nat_gateways()['NatGateways']:
+            if gateway['State'] == 'available':
+                if gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'):
+                    delete_dns_record(account,
+                                      'nat-{}'.format(ec2.Subnet(gateway['SubnetId']).availability_zone),
+                                      gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'))
+                if gateway['State'] in ('pending', 'available'):
+                    ec2c.delete_nat_gateway(NatGatewayId=gateway['NatGatewayId'])
+    filters = [
+        {'Name': 'state', 'Values': ['pending', 'available', 'deleting']}
+    ]
+    nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
+    while len(nat_gateway) and nat_gateway[0]['State'] == 'deleting':
+        warning('Nat Gateway is deleting.. waiting..')
+        time.sleep(10)
+        nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
+
+    with ActionOnExit('Delete Endpoints..') as act:
+        for endpoint in ec2c.describe_vpc_endpoints()['VpcEndpoints']:
+            ec2c.delete_vpc_endpoints(VpcEndpointIds=[endpoint['VpcEndpointId']])
+
+    with ActionOnExit('Delete Subnets..') as act:
+        for subnet in ec2c.describe_subnets()['Subnets']:
+            ec2c.delete_subnet(SubnetId=subnet['SubnetId'])
+
+    with ActionOnExit('Delete Routing Table..') as act:
+        for route_table in ec2c.describe_route_tables()['RouteTables']:
+            if not route_table['Associations'] or not route_table['Associations'][0]['Main']:
+                ec2c.delete_route_table(RouteTableId=route_table['RouteTableId'])
+
+    with ActionOnExit('Delete non default VPCs..') as act:
+        for vpc in ec2c.describe_vpcs()['Vpcs']:
+            if not vpc['IsDefault']:
+                ec2c.delete_vpc(VpcId=vpc['VpcId'])
+
+    with ActionOnExit('Delete Elastic IPs..') as act:
+        for eip in ec2c.describe_addresses()['Addresses']:
+            ec2c.release_address(AllocationId=eip['AllocationId'])
