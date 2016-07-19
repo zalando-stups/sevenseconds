@@ -553,6 +553,7 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
 def if_vpc_empty(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
+
     def instance_state(instance_id):
         if instance_id:
             return ec2.Instance(id=instance_id).state.get('Name')
@@ -562,7 +563,8 @@ def if_vpc_empty(account: object, region: str):
         if instance_id:
             instance = ec2.Instance(id=instance_id)
             availability_zones = get_az_names(account.session, region)
-            if get_tag(instance.tags, 'Name') in ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones]):
+            stups_names = ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones])
+            if get_tag(instance.tags, 'Name') in stups_names:
                 return True
         allocation_id = ni.get('Association', {}).get('AllocationId')
         if allocation_id:
@@ -618,8 +620,7 @@ def cleanup_vpc(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
 
-    from pprint import pprint
-    with ActionOnExit('Delete Nat Gateways..') as act:
+    with ActionOnExit('Delete Nat Gateways..'):
         for gateway in ec2c.describe_nat_gateways()['NatGateways']:
             if gateway['State'] == 'available':
                 if gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'):
@@ -637,24 +638,24 @@ def cleanup_vpc(account: object, region: str):
         time.sleep(10)
         nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
 
-    with ActionOnExit('Delete Endpoints..') as act:
+    with ActionOnExit('Delete Endpoints..'):
         for endpoint in ec2c.describe_vpc_endpoints()['VpcEndpoints']:
             ec2c.delete_vpc_endpoints(VpcEndpointIds=[endpoint['VpcEndpointId']])
 
-    with ActionOnExit('Delete Subnets..') as act:
+    with ActionOnExit('Delete Subnets..'):
         for subnet in ec2c.describe_subnets()['Subnets']:
             ec2c.delete_subnet(SubnetId=subnet['SubnetId'])
 
-    with ActionOnExit('Delete Routing Table..') as act:
+    with ActionOnExit('Delete Routing Table..'):
         for route_table in ec2c.describe_route_tables()['RouteTables']:
             if not route_table['Associations'] or not route_table['Associations'][0]['Main']:
                 ec2c.delete_route_table(RouteTableId=route_table['RouteTableId'])
 
-    with ActionOnExit('Delete non default VPCs..') as act:
+    with ActionOnExit('Delete non default VPCs..'):
         for vpc in ec2c.describe_vpcs()['Vpcs']:
             if not vpc['IsDefault']:
                 ec2c.delete_vpc(VpcId=vpc['VpcId'])
 
-    with ActionOnExit('Delete Elastic IPs..') as act:
+    with ActionOnExit('Delete Elastic IPs..'):
         for eip in ec2c.describe_addresses()['Addresses']:
             ec2c.release_address(AllocationId=eip['AllocationId'])

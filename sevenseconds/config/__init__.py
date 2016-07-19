@@ -122,6 +122,7 @@ def cleanup_account_except(session_data: AccountData, region: str):
         error(traceback.format_exc())
         error(e)
 
+
 def cleanup_account(session_data: AccountData, region: str):
     start_time = time.time()
     sevenseconds.helper.THREADDATA.name = session_data.name
