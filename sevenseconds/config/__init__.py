@@ -16,7 +16,7 @@ from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .cloudwatch import configure_log_group
-from .vpc import configure_vpc, if_vpc_empty, cleanup_vpc
+from .vpc import configure_vpc, if_vpc_empty, cleanup_vpc, delete_nat_host
 from .bastion import configure_bastion_host, delete_bastion_host
 from .elasticache import configure_elasticache
 from .rds import configure_rds
@@ -152,6 +152,7 @@ def cleanup_account_region(account: object, region: str):
         info('Region IS empty. Start clean up!')
         if not account.dry_run:
             delete_bastion_host(account, region)
+            delete_nat_host(account, region)
             cleanup_vpc(account, region)
     else:
         error('Region is not empty. Skip clean up!')

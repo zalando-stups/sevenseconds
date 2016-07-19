@@ -200,10 +200,8 @@ def delete_bastion_host(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
     availability_zones = get_az_names(account.session, region)
     for instance in ec2.instances.all():
-        if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
-            if instance.public_ip_address:
-                delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
-            # Drop Bastion and NAT Instances
-            stups_names = ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones])
-            if get_tag(instance.tags, 'Name') in stups_names:
+        if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
+            if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
+                if instance.public_ip_address:
+                    delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
                 drop_bastionhost(instance)

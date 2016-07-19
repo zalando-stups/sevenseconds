@@ -616,6 +616,21 @@ def if_vpc_empty(account: object, region: str):
     return account_is_free
 
 
+def delete_nat_host(account: object, region: str):
+    ec2 = account.session.resource('ec2', region)
+    availability_zones = get_az_names(account.session, region)
+    for instance in ec2.instances.all():
+        if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
+            if instance.public_ip_address:
+                delete_dns_record(account,
+                                  'nat-{}'.format(instance.subnet.availability_zone),
+                                  instance.public_ip_address)
+            # Drop Bastion and NAT Instances
+            stups_names = tuple(['NAT {}'.format(x) for x in availability_zones])
+            if get_tag(instance.tags, 'Name') in stups_names:
+                terminitate_nat_instance(instance, instance.subnet.availability_zone)
+
+
 def cleanup_vpc(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)

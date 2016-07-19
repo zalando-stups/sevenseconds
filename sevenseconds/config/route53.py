@@ -100,7 +100,7 @@ def configure_dns_record(account, hostname, value, type='A', action='UPSERT'):
                     'Comment': 'DNS Entry for {}'.format(hostname),
                     'Changes': [
                         {
-                            'Action': 'UPSERT',
+                            'Action': action,
                             'ResourceRecordSet': {
                                 'Name': domain,
                                 'Type': type,
