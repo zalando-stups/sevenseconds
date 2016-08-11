@@ -82,7 +82,7 @@ def get_dns_record(account, dnsname, record_type='A'):
         return
 
 
-def configure_dns_record(account, hostname, value, type='A'):
+def configure_dns_record(account, hostname, value, type='A', action='UPSERT'):
     if isinstance(value, list):
         values = value
     else:
@@ -90,7 +90,8 @@ def configure_dns_record(account, hostname, value, type='A'):
     route53 = account.session.client('route53')
     dns_domain = account.config.get('domain').format(account_name=account.name)
     domain = '.'.join([hostname, dns_domain])
-    with ActionOnExit('Adding DNS record {}: {}'.format(domain, values)) as act:
+    with ActionOnExit('{} DNS record {}: {}'
+                      .format('Adding' if action == 'UPSERT' else 'Deleting', domain, values)) as act:
         zone_id = find_zoneid(domain, route53)
         if zone_id:
             response = route53.change_resource_record_sets(
@@ -99,7 +100,7 @@ def configure_dns_record(account, hostname, value, type='A'):
                     'Comment': 'DNS Entry for {}'.format(hostname),
                     'Changes': [
                         {
-                            'Action': 'UPSERT',
+                            'Action': action,
                             'ResourceRecordSet': {
                                 'Name': domain,
                                 'Type': type,
@@ -116,6 +117,10 @@ def configure_dns_record(account, hostname, value, type='A'):
                 act.error('Request for {} failed: {}'.format(domain, response))
         else:
             act.error('Can\'t find any Zone for {}'. format(domain))
+
+
+def delete_dns_record(account, hostname, value, type='A', action='UPSERT'):
+    configure_dns_record(account, hostname, value, type, 'DELETE')
 
 
 def find_zoneid(domain: str, route53: object):

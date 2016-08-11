@@ -16,8 +16,8 @@ from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .cloudwatch import configure_log_group
-from .vpc import configure_vpc
-from .bastion import configure_bastion_host
+from .vpc import configure_vpc, if_vpc_empty, cleanup_vpc, delete_nat_host
+from .bastion import configure_bastion_host, delete_bastion_host
 from .elasticache import configure_elasticache
 from .rds import configure_rds
 from .securitygroup import configure_security_groups
@@ -106,3 +106,59 @@ def configure_account_region(account: object, region: str, trusted_addresses: se
     configure_elasticache(account.session, region, vpc)
     configure_rds(account.session, region, vpc)
     configure_security_groups(account, region, trusted_addresses)
+
+
+def start_cleanup(region: str, sessions: list, options: dict):
+    info('Start Pool processing...')
+    with Pool(processes=options.get('max_procs', os.cpu_count())) as pool:
+        pool.starmap(cleanup_account_except, zip(sessions.values(), repeat(region)))
+    info('Pool processing done... ')
+
+
+def cleanup_account_except(session_data: AccountData, region: str):
+    try:
+        cleanup_account(session_data, region)
+    except Exception as e:
+        error(traceback.format_exc())
+        error(e)
+
+
+def cleanup_account(session_data: AccountData, region: str):
+    start_time = time.time()
+    sevenseconds.helper.THREADDATA.name = session_data.name
+    session = {}
+    for session_name in ('session', 'admin_session', 'ami_session'):
+        session[session_name] = boto3.session.Session(**getattr(session_data, session_name))
+    account = session_data._replace(id=get_account_id(session['session']), **session)
+    del(session)
+    # Remove Default-Session
+    boto3.DEFAULT_SESSION = None
+    # account_id = get_account_id(session['account'])
+    # info('Account ID is {}'.format(account_id))
+
+    account_alias_from_aws = get_account_alias(account.session)
+    if account.alias != account_alias_from_aws:
+        error('Connected to "{}", but account "{}" should be configured'.format(account_alias_from_aws, account.alias))
+        return
+
+    cleanup_account_region(account, region)
+
+    ok('Done with {} / {} after {}'.format(account.id, account.name, timedelta(seconds=time.time() - start_time)))
+
+
+def cleanup_account_region(account: object, region: str):
+    sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
+    if if_vpc_empty(account, region):
+        info('Region IS empty. Start clean up!')
+        if not account.dry_run:
+            delete_bastion_host(account, region)
+            delete_nat_host(account, region)
+            cleanup_vpc(account, region)
+    else:
+        error('Region is not empty. Skip clean up!')
+
+    # vpc = configure_vpc(account, region)
+    # configure_bastion_host(account, vpc, region)
+    # configure_elasticache(account.session, region, vpc)
+    # configure_rds(account.session, region, vpc)
+    # configure_security_groups(account, region, trusted_addresses)

@@ -7,9 +7,9 @@ import difflib
 import botocore.exceptions
 import requests
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
-from ..helper.aws import filter_subnets, associate_address
+from ..helper.aws import filter_subnets, associate_address, get_tag
 from .ami import get_base_ami_id
-from .route53 import configure_dns_record
+from .route53 import configure_dns_record, delete_dns_record
 
 
 def configure_bastion_host(account: object, vpc: object, region: str):
@@ -172,7 +172,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
 
 
 def drop_bastionhost(instance):
-    with ActionOnExit('Terminating SSH Bastion host for redeployment..'):
+    with ActionOnExit('Terminating SSH Bastion host..'):
         instance.modify_attribute(Attribute='disableApiTermination', Value='false')
         instance.terminate()
         instance.wait_until_terminated()
@@ -194,3 +194,16 @@ def wait_for_ssh_port(host: str, timeout: int):
                 return False
             time.sleep(5)
             act.progress()
+
+
+def delete_bastion_host(account: object, region: str):
+    ec2 = account.session.resource('ec2', region)
+    for instance in ec2.instances.all():
+        if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
+            if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
+                if instance.public_ip_address:
+                    try:
+                        delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
+                    except:
+                        pass
+                drop_bastionhost(instance)
