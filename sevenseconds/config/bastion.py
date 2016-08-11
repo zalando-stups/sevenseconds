@@ -202,5 +202,8 @@ def delete_bastion_host(account: object, region: str):
         if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
             if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
                 if instance.public_ip_address:
-                    delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
+                    try:
+                        delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
+                    except:
+                        pass
                 drop_bastionhost(instance)
