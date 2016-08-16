@@ -14,6 +14,7 @@ from .route53 import configure_dns_record, delete_dns_record
 
 def configure_bastion_host(account: object, vpc: object, region: str):
     ec2c = account.session.client('ec2', region)
+    cwc = account.session.client('cloudwatch', region)
     # account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict, vpc_net: IPNetwork
     try:
         subnet = list(filter_subnets(vpc, 'dmz'))[0]
@@ -108,6 +109,19 @@ def configure_bastion_host(account: object, vpc: object, region: str):
             instance.create_tags(Tags=[{'Key': 'Name', 'Value': sg_name}])
             ip = None
             # FIXME activate Autorecovery !!
+            cwc.put_metric_alarm(AlarmName='odd-host-{}-auto-recover'.format(instance.id),
+                            AlarmActions=['arn:aws:automate:{}:ec2:recover'.format(region)],
+                            MetricName='StatusCheckFailed',
+                            Namespace='AWS/EC2',
+                            Statistic='Minimum',
+                            Dimensions=[{
+                                'Name': 'InstanceId',
+                                'Value': instance.id
+                            }],
+                            Period=60,  # 1 minute
+                            EvaluationPeriods=2,
+                            Threshold=0,
+                            ComparisonOperator='GreaterThanThreshold')
 
     if ip is None:
         with ActionOnExit('Associating Elastic IP to {}..'.format(instance.id)):
