@@ -110,18 +110,18 @@ def configure_bastion_host(account: object, vpc: object, region: str):
             ip = None
             # FIXME activate Autorecovery !!
             cwc.put_metric_alarm(AlarmName='odd-host-{}-auto-recover'.format(instance.id),
-                            AlarmActions=['arn:aws:automate:{}:ec2:recover'.format(region)],
-                            MetricName='StatusCheckFailed',
-                            Namespace='AWS/EC2',
-                            Statistic='Minimum',
-                            Dimensions=[{
-                                'Name': 'InstanceId',
-                                'Value': instance.id
-                            }],
-                            Period=60,  # 1 minute
-                            EvaluationPeriods=2,
-                            Threshold=0,
-                            ComparisonOperator='GreaterThanThreshold')
+                                 AlarmActions=['arn:aws:automate:{}:ec2:recover'.format(region)],
+                                 MetricName='StatusCheckFailed',
+                                 Namespace='AWS/EC2',
+                                 Statistic='Minimum',
+                                 Dimensions=[{
+                                     'Name': 'InstanceId',
+                                     'Value': instance.id
+                                 }],
+                                 Period=60,  # 1 minute
+                                 EvaluationPeriods=2,
+                                 Threshold=0,
+                                 ComparisonOperator='GreaterThanThreshold')
 
     if ip is None:
         with ActionOnExit('Associating Elastic IP to {}..'.format(instance.id)):
