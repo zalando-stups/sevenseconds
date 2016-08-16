@@ -19,36 +19,54 @@ def configure_iam_policy(account: object):
     info('Account ID is {}'.format(account.id))
 
     for role_name, role_cfg in sorted(roles.items()):
-        with ActionOnExit('Checking role {role_name}..', **vars()) as act:
+        if role_cfg.get('drop', False):
+            with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
+                try:
+                    iam.Role(role_name).arn
+                except:
+                    act.ok('not found')
+                    return
+                try:
+                    for policy in iam.Role(role_name).policies.all():
+                        policy.delete()
+                    for policy in iam.Role(role_name).attached_policies.all():
+                        policy.detach_role(RoleName=role_name)
+                    iam.Role(role_name).delete()
+                    act.ok('dropped')
+                except Exception as e:
+                    act.error(e)
+
+        else:
+            with ActionOnExit('Checking role {role_name}..', **vars()) as act:
+                try:
+                    role_policy = iam.RolePolicy(role_name, role_name)
+                    if (role_policy.policy_document == role_cfg['policy'] and
+                       len(list(role_policy.Role().policies.all())) == 1 and
+                       len(list(iam.Role(role_name).attached_policies.all())) == 0):
+                        continue
+                    else:
+                        act.error('missmatch')
+                except:
+                    act.error('Failed')
+
             try:
-                role_policy = iam.RolePolicy(role_name, role_name)
-                if (role_policy.policy_document == role_cfg['policy'] and
-                   len(list(role_policy.Role().policies.all())) == 1 and
-                   len(list(iam.Role(role_name).attached_policies.all())) == 0):
-                    continue
-                else:
-                    act.error('missmatch')
+                iam.Role(role_name).arn
             except:
-                act.error('Failed')
+                with ActionOnExit('Creating role {role_name}..', **vars()):
+                    policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
+                    iam.create_role(Path='/', RoleName=role_name, AssumeRolePolicyDocument=policy_document)
 
-        try:
-            iam.Role(role_name).arn
-        except:
-            with ActionOnExit('Creating role {role_name}..', **vars()):
-                policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
-                iam.create_role(Path='/', RoleName=role_name, AssumeRolePolicyDocument=policy_document)
+            with ActionOnExit('Updating policy for role {role_name}..', **vars()):
+                iam.RolePolicy(role_name, role_name).put(PolicyDocument=json.dumps(role_cfg['policy']))
 
-        with ActionOnExit('Updating policy for role {role_name}..', **vars()):
-            iam.RolePolicy(role_name, role_name).put(PolicyDocument=json.dumps(role_cfg['policy']))
-
-        with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
-            for policy in iam.Role(role_name).policies.all():
-                if policy.name != role_name:
-                    act.warning('Delete {} from {}'.format(policy.name, role_name))
-                    policy.delete()
-            for policy in iam.Role(role_name).attached_policies.all():
-                act.warning('Detach {} from {}'.format(policy.policy_name, role_name))
-                policy.detach_role(RoleName=role_name)
+            with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
+                for policy in iam.Role(role_name).policies.all():
+                    if policy.name != role_name:
+                        act.warning('Delete {} from {}'.format(policy.name, role_name))
+                        policy.delete()
+                for policy in iam.Role(role_name).attached_policies.all():
+                    act.warning('Detach {} from {}'.format(policy.policy_name, role_name))
+                    policy.detach_role(RoleName=role_name)
 
 
 def configure_iam_saml(account: object):
