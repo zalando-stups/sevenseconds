@@ -102,17 +102,6 @@ def configure_bastion_host(account: object, vpc: object, region: str):
                                                MinCount=1,
                                                MaxCount=1,
                                                DisableApiTermination=True,
-                                               BlockDeviceMappings=[
-                                                    {
-                                                        'DeviceName': '/dev/sda1',
-                                                        'Ebs': {
-                                                            'VolumeSize': 8,
-                                                            'DeleteOnTermination': True,
-                                                            'VolumeType': 'gp2'
-                                                        },
-                                                        'NoDevice': ''
-                                                    },
-                                                ],
                                                Monitoring={'Enabled': True})[0]
 
             waiter = ec2c.get_waiter('instance_running')
@@ -122,7 +111,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
             # FIXME activate Autorecovery !!
             cwc.put_metric_alarm(AlarmName='odd-host-{}-auto-recover'.format(instance.id),
                             AlarmActions=['arn:aws:automate:{}:ec2:recover'.format(region)],
-                            MetricName='StatusCheckFailed_System',
+                            MetricName='StatusCheckFailed',
                             Namespace='AWS/EC2',
                             Statistic='Minimum',
                             Dimensions=[{
