@@ -165,7 +165,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
 
     launch_time = instance.launch_time
     if (not wait_for_ssh_port(ip, 60) and
-            datetime.timedelta(hours=1) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
+            datetime.timedelta(minutes=15) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
         error('Bastion Host does not response. Drop Bastionhost and create new one')
         drop_bastionhost(instance)
         configure_bastion_host(account, vpc, region)
