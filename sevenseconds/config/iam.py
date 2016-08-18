@@ -17,6 +17,7 @@ def configure_iam_policy(account: object):
     roles = account.config.get('roles', {})
 
     info('Account ID is {}'.format(account.id))
+    info('Roles {}'.format(roles))
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
@@ -25,16 +26,16 @@ def configure_iam_policy(account: object):
                     iam.Role(role_name).arn
                 except:
                     act.ok('not found')
-                    return
-                try:
-                    for policy in iam.Role(role_name).policies.all():
-                        policy.delete()
-                    for policy in iam.Role(role_name).attached_policies.all():
-                        policy.detach_role(RoleName=role_name)
-                    iam.Role(role_name).delete()
-                    act.ok('dropped')
-                except Exception as e:
-                    act.error(e)
+                else:
+                    try:
+                        for policy in iam.Role(role_name).policies.all():
+                            policy.delete()
+                        for policy in iam.Role(role_name).attached_policies.all():
+                            policy.detach_role(RoleName=role_name)
+                        iam.Role(role_name).delete()
+                        act.ok('dropped')
+                    except Exception as e:
+                        act.error(e)
 
         else:
             with ActionOnExit('Checking role {role_name}..', **vars()) as act:
