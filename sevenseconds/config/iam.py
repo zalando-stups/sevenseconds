@@ -17,7 +17,6 @@ def configure_iam_policy(account: object):
     roles = account.config.get('roles', {})
 
     info('Account ID is {}'.format(account.id))
-    info('Roles {}'.format(roles))
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
