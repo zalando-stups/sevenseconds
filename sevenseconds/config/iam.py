@@ -54,7 +54,9 @@ def configure_iam_policy(account: object):
             except:
                 with ActionOnExit('Creating role {role_name}..', **vars()):
                     policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
-                    iam.create_role(Path=role_cfg.get('path', '/'), RoleName=role_name, AssumeRolePolicyDocument=policy_document)
+                    iam.create_role(Path=role_cfg.get('path', '/'),
+                                    RoleName=role_name,
+                                    AssumeRolePolicyDocument=policy_document)
 
             with ActionOnExit('Updating policy for role {role_name}..', **vars()):
                 iam.RolePolicy(role_name, role_name).put(PolicyDocument=json.dumps(role_cfg['policy']))
