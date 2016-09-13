@@ -6,6 +6,7 @@ import base64
 import difflib
 import botocore.exceptions
 import requests
+import json
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
 from ..helper.aws import filter_subnets, associate_address, get_tag
 from .ami import get_base_ami_id
@@ -13,6 +14,254 @@ from .route53 import configure_dns_record, delete_dns_record
 
 
 def configure_bastion_host(account: object, vpc: object, region: str):
+    ec2 = account.session.resource('ec2', region)
+    cf = account.session.resource('cloudformation', region)
+    cfc = account.session.client('cloudformation', region)
+
+    re_deploy = account.config['bastion'].get('re_deploy', account.options.get('redeploy_odd_host'))
+
+    bastion_version = None
+    if account.config['bastion'].get('version_url'):
+        with ActionOnExit('Get last Tag for Bastion Image...') as act:
+            r = requests.get(account.config['bastion'].get('version_url'))
+            if r.status_code != 200:
+                act.error('Error code: {}'.format(r.status_code))
+                act.error('Error msg: {}'.format(r.text))
+                return
+            tags = sorted(r.json(), key=lambda x: x['created'], reverse=True)
+            bastion_version = tags[0]['name']
+            act.ok(bastion_version)
+
+    config = substitute_template_vars(account.config['bastion'].get('ami_config'),
+                                      {'account_name': account.name,
+                                       'vpc_net': str(vpc.cidr_block),
+                                       'version': bastion_version})
+    user_data = '#taupage-ami-config\n{}'.format(yaml.safe_dump(config)).encode('utf-8')
+    ami_id = get_base_ami_id(account, region)
+
+    # Search all existing hosts (Instances and Cloudformation)
+    instance_filter = [
+        {'Name': 'tag:Name',
+         'Values': ['Odd (SSH Bastion Host)']},
+        {'Name': 'instance-state-name',
+         'Values': ['running', 'pending', 'stopping', 'stopped']},
+    ]
+    legacy_instances = list(vpc.instances.filter(Filters=instance_filter))
+    for instance in legacy_instances:
+        # Terminate old (stopped) Odd Systems
+        if instance.state.get('Name') == 'stopped':
+            drop_bastionhost(instance)
+        else:
+            # Verify Running Version (Userdate, FS Parameter)
+            inst_user_data = base64.b64decode(instance.describe_attribute(Attribute='userData')['UserData']['Value'])
+            if instance.image_id != ami_id:
+                error('{} use {} instand of {}.'.format(instance.id, instance.image_id, ami_id))
+                if re_deploy or account.options.get('update_odd_host'):
+                    error(' ==> Make re-deploy')
+                    re_deploy = True
+            if inst_user_data != user_data:
+                original = inst_user_data.decode('utf-8')
+                new = user_data.decode('utf-8')
+                diff = difflib.ndiff(original.splitlines(1), new.splitlines(1))
+                error('{} use a different UserData\n{}'.format(instance.id, ''.join(diff)))
+                if re_deploy or account.options.get('update_odd_host'):
+                    error(' ==> Make re-deploy')
+                    re_deploy = True
+            launch_time = instance.launch_time
+            if (not wait_for_ssh_port(instance.public_ip_address, 60) and
+                    datetime.timedelta(minutes=15) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
+                error('Bastion Host does not response. Drop Bastionhost and create new one')
+                drop_bastionhost(instance)
+                legacy_instances = None
+
+    # Start migration
+    if legacy_instances and re_deploy:
+        for instance in legacy_instances:
+            drop_bastionhost(instance)
+        legacy_instances = None
+
+    update_needed = False
+
+    # Check Odd Hosts in other vpcs
+    cloudformation_filter = [
+        {'Name': 'tag:aws:cloudformation:logical-id',
+         'Values': ['OddServerInstance']},
+        {'Name': 'instance-state-name',
+         'Values': ['running', 'pending', 'stopping', 'stopped']},
+    ]
+    cloudformation_instances = list(vpc.instances.filter(Filters=cloudformation_filter))
+    if cloudformation_instances:
+        for instance in cloudformation_instances:
+            # Terminate old (stopped) Odd Systems
+            if instance.state.get('Name') == 'stopped':
+                drop_bastionhost(instance)
+            else:
+                # Verify Running Version (Userdate, FS Parameter)
+                oddstack = cf.Stack(get_tag(instance.tags, 'aws:cloudformation:stack-name'))
+
+                used_ami_id = get_tag(oddstack.parameters, 'TaupageId', prefix='Parameter')
+                if used_ami_id != ami_id:
+                    error('{} use {} instand of {}.'.format(oddstack.name, used_ami_id, ami_id))
+                    if re_deploy or account.options.get('update_odd_host'):
+                        error(' ==> prepare change set')
+                        update_needed = True
+                used_bastion_version = get_tag(oddstack.parameters, 'OddRelease', prefix='Parameter')
+                if used_bastion_version != bastion_version:
+                    error('{} use {} instand of {}.'.format(oddstack.name, used_bastion_version, bastion_version))
+                    if re_deploy or account.options.get('update_odd_host'):
+                        error(' ==> prepare change set')
+                        update_needed = True
+                if update_needed or re_deploy:
+                    update_cf_bastion_host(account, vpc, region, oddstack, ami_id, bastion_version)
+
+    if not legacy_instances and not cloudformation_instances:
+        try:
+            stack = cf.Stack('Odd')
+            info('Stack Status: {}'.format(stack.stack_status))
+        except:
+            create_cf_bastion_host(account, vpc, region, ami_id, bastion_version)
+        if stack.stack_status in ('UPDATE_IN_PROGRESS', 'CREATE_IN_PROGRESS'):
+            if stack.stack_status.startswith('UPDATE_'):
+                waiter = cfc.get_waiter('stack_update_complete')
+            else:
+                waiter = cfc.get_waiter('stack_create_complete')
+            with ActionOnExit('Waiting of Stack') as act:
+                try:
+                    waiter.wait(StackName='Odd')
+                except botocore.exceptions.WaiterError as e:
+                    act.error('Stack creation failed: {}'.format(e))
+                    return
+
+        instance = ec2.Instance(stack.Resource(logical_id='OddServerInstance').physical_resource_id)
+        launch_time = instance.launch_time
+        if (not wait_for_ssh_port(instance.public_ip_address, 60) and
+                datetime.timedelta(minutes=15) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
+            error('Bastion Host does not response. Force Update for Bastionhost Stack')
+            update_cf_bastion_host(account, vpc, region, stack, ami_id, bastion_version)
+
+
+def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: str, bastion_version: str):
+    cf = account.session.resource('cloudformation', region)
+    cfc = account.session.client('cloudformation', region)
+    ec2c = account.session.client('ec2', region)
+
+    subnet_ids = [a.id for a in filter_subnets(vpc, 'dmz')]
+    if not subnet_ids:
+        warning('No DMZ subnet found')
+        return
+
+    allocation_id, ip = associate_address(ec2c)
+    stackname = 'Odd'
+    stack = cf.create_stack(
+        StackName=stackname,
+        TemplateBody=json.dumps(account.config['bastion'].get('cf_template')),
+        Parameters=[
+            {
+                'ParameterKey': 'DisableApiTermination',
+                'ParameterValue': 'false'
+            },
+            {
+                'ParameterKey': 'EIPAllocation',
+                'ParameterValue': allocation_id
+            },
+            {
+                'ParameterKey': 'OddRelease',
+                'ParameterValue': bastion_version
+            },
+            {
+                'ParameterKey': 'SubnetId',
+                'ParameterValue': subnet_ids[0]
+            },
+            {
+                'ParameterKey': 'TaupageId',
+                'ParameterValue': ami_id
+            },
+            {
+                'ParameterKey': 'VPCNetwork',
+                'ParameterValue': str(vpc.cidr_block)
+            },
+            {
+                'ParameterKey': 'VpcId',
+                'ParameterValue': vpc.id
+            }
+        ],
+        OnFailure='DELETE',
+        Tags=[
+                {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+        ]
+    )
+    with ActionOnExit('Wait of create complete') as act:
+        waiter = cfc.get_waiter('stack_create_complete')
+        try:
+            waiter.wait(StackName=stack.name)
+        except botocore.exceptions.WaiterError as e:
+            act.error('Stack creation failed: {}'.format(e))
+            return
+
+    info('SSH Bastion instance is running with public IP {}'.format(ip))
+    configure_dns_record(account, 'odd-{}'.format(region), ip)
+
+
+def update_cf_bastion_host(account: object, vpc: object, region: str, stack: object, ami_id: str, bastion_version: str):
+    cloudformation = account.session.client('cloudformation', region)
+
+    # switch subnet, every update => force reinitialisation
+    current_subnet = get_tag(stack.parameters, 'SubnetId', prefix='Parameter')
+    subnet_ids = [a.id for a in filter_subnets(vpc, 'dmz')]
+    if current_subnet in subnet_ids:
+        subnet_ids.remove(current_subnet)
+
+    if not subnet_ids:
+        warning('No DMZ subnet found')
+        return
+
+    response = stack.update(
+        TemplateBody=json.dumps(account.config['bastion'].get('cf_template')),
+        Parameters=[
+            {
+                'ParameterKey': 'DisableApiTermination',
+                'ParameterValue': 'false'
+            },
+            {
+                'ParameterKey': 'EIPAllocation',
+                'ParameterValue': get_tag(stack.parameters, 'EIPAllocation', prefix='Parameter')
+            },
+            {
+                'ParameterKey': 'OddRelease',
+                'ParameterValue': bastion_version
+            },
+            {
+                'ParameterKey': 'SubnetId',
+                'ParameterValue': subnet_ids[0]
+            },
+            {
+                'ParameterKey': 'TaupageId',
+                'ParameterValue': ami_id
+            },
+            {
+                'ParameterKey': 'VPCNetwork',
+                'ParameterValue': str(vpc.cidr_block)
+            },
+            {
+                'ParameterKey': 'VpcId',
+                'ParameterValue': vpc.id
+            }
+        ],
+        Tags=[
+            {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+        ]
+    )
+    info(response)
+    with ActionOnExit('Wait of update complete') as act:
+        waiter = cloudformation.get_waiter('stack_update_complete')
+        try:
+            waiter.wait(StackName=stack.name)
+        except botocore.exceptions.WaiterError as e:
+            act.error('Stack creation failed: {}'.format(e))
+            return
+
+
+def configure_bastion_host_deprecated(account: object, vpc: object, region: str):
     ec2c = account.session.client('ec2', region)
     cwc = account.session.client('cloudwatch', region)
     # account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict, vpc_net: IPNetwork
@@ -187,9 +436,11 @@ def configure_bastion_host(account: object, vpc: object, region: str):
 
 def drop_bastionhost(instance):
     with ActionOnExit('Terminating SSH Bastion host..'):
-        instance.modify_attribute(Attribute='disableApiTermination', Value='false')
-        instance.terminate()
-        instance.wait_until_terminated()
+        instance.reload()
+        if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
+            instance.modify_attribute(Attribute='disableApiTermination', Value='false')
+            instance.terminate()
+            instance.wait_until_terminated()
 
 
 def wait_for_ssh_port(host: str, timeout: int):

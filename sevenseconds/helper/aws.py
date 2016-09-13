@@ -54,7 +54,7 @@ def get_az_names(session, region: str):
     return names
 
 
-def get_tag(tags: list, key: str, default=None):
+def get_tag(tags: list, key: str, default=None, prefix=''):
     '''
     >>> tags = [{'Key': 'aws:cloudformation:stack-id',
     ...          'Value': 'arn:aws:cloudformation:eu-west-1:123:stack/test-123'},
@@ -68,9 +68,19 @@ def get_tag(tags: list, key: str, default=None):
     'arn:aws:cloudformation:eu-west-1:123:stack/test-123'
     >>> get_tag(tags, 'notfound') is None
     True
+    >>> parameters = [{'ParameterKey': 'VpcId', 'ParameterValue': 'vpc-123321'},
+    ...               {'ParameterKey': 'TaupageId', 'ParameterValue': 'ami-123321'},
+    ...               {'ParameterKey': 'EIPAllocation', 'ParameterValue': 'eipalloc-123321'},
+    ...               {'ParameterKey': 'SubnetId', 'ParameterValue': 'subnet-123321'},
+    ...               {'ParameterKey': 'InstanceType', 'ParameterValue': 't2.micro'},
+    ...               {'ParameterKey': 'OddRelease', 'ParameterValue': 'v123'}]
+    >>> get_tag(parameters, 'TaupageId', prefix='Parameter')
+    'ami-123321'
+    >>> get_tag(parameters, 'OddRelease', prefix='Parameter')
+    'v123'
     '''
     if isinstance(tags, list):
-        found = [tag['Value'] for tag in tags if tag['Key'] == key]
+        found = [tag['{}Value'.format(prefix)] for tag in tags if tag['{}Key'.format(prefix)] == key]
         if len(found):
             return found[0]
     return default
