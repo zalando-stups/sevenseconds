@@ -7,6 +7,7 @@ import difflib
 import botocore.exceptions
 import requests
 import json
+from copy import deepcopy
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
 from ..helper.aws import filter_subnets, associate_address, get_tag
 from .ami import get_base_ami_id
@@ -113,6 +114,9 @@ def configure_bastion_host(account: object, vpc: object, region: str):
                         update_needed = True
                 if update_needed or re_deploy:
                     update_cf_bastion_host(account, vpc, region, oddstack, ami_id, bastion_version)
+                if not legacy_instances:
+                    info('check old odd security groups')
+                    cleanup_old_security_group(account, region, oddstack, vpc)
 
     if not legacy_instances and not cloudformation_instances:
         try:
@@ -131,6 +135,8 @@ def configure_bastion_host(account: object, vpc: object, region: str):
                 except botocore.exceptions.WaiterError as e:
                     act.error('Stack creation failed: {}'.format(e))
                     return
+            info('check old odd security groups')
+            cleanup_old_security_group(account, region, stack, vpc)
 
         instance = ec2.Instance(stack.Resource(logical_id='OddServerInstance').physical_resource_id)
         launch_time = instance.launch_time
@@ -138,6 +144,66 @@ def configure_bastion_host(account: object, vpc: object, region: str):
                 datetime.timedelta(minutes=15) < datetime.datetime.now(launch_time.tzinfo) - launch_time):
             error('Bastion Host does not response. Force Update for Bastionhost Stack')
             update_cf_bastion_host(account, vpc, region, stack, ami_id, bastion_version)
+
+
+def cleanup_old_security_group(account: object, region: str, oddstack: object, vpc: object):
+    ec2 = account.session.resource('ec2', region)
+    stack_security_group_id = oddstack.Resource(logical_id='OddSecurityGroup').physical_resource_id
+    sgs = [x for x in vpc.security_groups.all() if x.group_name == 'Odd (SSH Bastion Host)']
+    for sg in sgs:
+        with ActionOnExit('Found old Odd Security Group {}/{}'.format(sg.id, sg.group_name)) as act:
+            for sg_depency in vpc.meta.client.describe_security_groups(Filters=[
+                        {
+                            'Name': 'ip-permission.group-id',
+                            'Values': [
+                                sg.group_id,
+                            ]
+                        },
+                    ])['SecurityGroups']:
+                sg_depency = ec2.SecurityGroup(sg_depency.get('GroupId'))
+                with ActionOnExit(
+                        'Found old Odd SG depency in Security Group {}/{}'
+                        .format(sg_depency.id, sg_depency.group_name)) as act:
+                    for permission in sg_depency.ip_permissions:
+                        _change_permission(sg_depency, permission, sg.group_id, stack_security_group_id, 'ingress', act)
+                    for permission in sg_depency.ip_permissions_egress:
+                        _change_permission(sg_depency, permission, sg.group_id, stack_security_group_id, 'egress', act)
+            try:
+                sg.delete()
+                act.ok('removed')
+            except Exception as e:
+                act.error('Can\'t cleanup old Odd Stack: {}'.format(e))
+
+
+def _change_permission(sg, permission, old_group_id, new_group_id, direction, act):
+    old_permission = deepcopy(permission)
+    replace = False
+    for user_id_group_pair in permission.get('UserIdGroupPairs', []):
+        if user_id_group_pair.get('GroupId') == old_group_id:
+            user_id_group_pair['GroupId'] = new_group_id
+            replace = True
+        if permission.get('UserIdGroupPairs'):
+            permission['UserIdGroupPairs'] = list(
+                dict(
+                    (v['GroupId'], v) for v in permission['UserIdGroupPairs']
+                    ).values()
+                )
+
+    if replace:
+        try:
+            if direction == 'egress':
+                sg.revoke_egress(IpPermissions=[old_permission])
+            elif direction == 'ingress':
+                sg.revoke_ingress(IpPermissions=[old_permission])
+        except Exception as e:
+            act.error('Can\'t revoke the Permissions: {}'.format(e))
+        try:
+            if direction == 'egress':
+                sg.authorize_egress(IpPermissions=[permission])
+            elif direction == 'ingress':
+                sg.authorize_ingress(IpPermissions=[permission])
+        except Exception as e:
+            act.error('Can\'t authorize the Permissions: {}'.format(e))
 
 
 def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: str, bastion_version: str):
