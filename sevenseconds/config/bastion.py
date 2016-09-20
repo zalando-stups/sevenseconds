@@ -529,6 +529,9 @@ def wait_for_ssh_port(host: str, timeout: int):
 
 def delete_bastion_host(account: object, region: str):
     ec2 = account.session.resource('ec2', region)
+    cf = account.session.resource('cloudformation', region)
+    cfc = account.session.client('cloudformation', region)
+
     for instance in ec2.instances.all():
         if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
             if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
@@ -538,3 +541,19 @@ def delete_bastion_host(account: object, region: str):
                     except:
                         pass
                 drop_bastionhost(instance)
+
+    cloudformation_filter = [
+        {'Name': 'tag:aws:cloudformation:logical-id',
+         'Values': ['OddServerInstance']},
+        {'Name': 'instance-state-name',
+         'Values': ['running', 'pending', 'stopping', 'stopped']},
+    ]
+    for instance in ec2.instances.filter(Filters=cloudformation_filter):
+        oddstack = cf.Stack(get_tag(instance.tags, 'aws:cloudformation:stack-name'))
+        oddstack.delete()
+        waiter = cfc.get_waiter('stack_delete_complete')
+        with ActionOnExit('Waiting of Stack delete') as act:
+            try:
+                waiter.wait(StackName=get_tag(instance.tags, 'aws:cloudformation:stack-name'))
+            except botocore.exceptions.WaiterError as e:
+                act.error('Stack delete failed: {}'.format(e))

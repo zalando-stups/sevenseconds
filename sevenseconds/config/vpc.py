@@ -568,9 +568,12 @@ def if_vpc_empty(account: object, region: str):
         instance_id = ni.get('Attachment', {}).get('InstanceId')
         if instance_id:
             instance = ec2.Instance(id=instance_id)
+            info(instance.tags)
             availability_zones = get_az_names(account.session, region)
             stups_names = ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones])
             if get_tag(instance.tags, 'Name') in stups_names:
+                return True
+            if get_tag(instance.tags, 'aws:cloudformation:logical-id') == 'OddServerInstance':
                 return True
         allocation_id = ni.get('Association', {}).get('AllocationId')
         if allocation_id:
