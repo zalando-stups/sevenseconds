@@ -256,7 +256,7 @@ def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: st
                 {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
         ]
     )
-    with ActionOnExit('Wait of create complete') as act:
+    with ActionOnExit('Wait of stack create complete') as act:
         waiter = cfc.get_waiter('stack_create_complete')
         try:
             waiter.wait(StackName=stack.name)
@@ -318,7 +318,7 @@ def update_cf_bastion_host(account: object, vpc: object, region: str, stack: obj
         ]
     )
     info(response)
-    with ActionOnExit('Wait of update complete') as act:
+    with ActionOnExit('Wait of stack update complete') as act:
         waiter = cloudformation.get_waiter('stack_update_complete')
         try:
             waiter.wait(StackName=stack.name)
