@@ -223,6 +223,10 @@ def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: st
         TemplateBody=json.dumps(account.config['bastion'].get('cf_template')),
         Parameters=[
             {
+                'ParameterKey': 'AccountName',
+                'ParameterValue': account.name
+            },
+            {
                 'ParameterKey': 'DisableApiTermination',
                 'ParameterValue': 'false'
             },
@@ -284,6 +288,10 @@ def update_cf_bastion_host(account: object, vpc: object, region: str, stack: obj
     response = stack.update(
         TemplateBody=json.dumps(account.config['bastion'].get('cf_template')),
         Parameters=[
+            {
+                'ParameterKey': 'AccountName',
+                'ParameterValue': account.name
+            },
             {
                 'ParameterKey': 'DisableApiTermination',
                 'ParameterValue': 'false'
