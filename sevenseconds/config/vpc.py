@@ -1,6 +1,7 @@
 import time
 import json
 import re
+import hashlib
 from netaddr import IPNetwork
 from ..helper import ActionOnExit, info, warning
 from ..helper.network import calculate_subnet
@@ -545,7 +546,12 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                         'VpcId': vpc.id,
                         'ServiceName': service_name,
                         'RouteTableIds': list(router_tables),
-                        'ClientToken': '{}-{}'.format(region, vpc.id)
+                        'ClientToken': hashlib.md5(
+                            '{}-{}:{}'.format(
+                                region,
+                                vpc.id,
+                                sorted(list(router_tables))
+                            ).encode('utf-8')).hexdigest()
                     }
                     act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
 
@@ -565,6 +571,8 @@ def if_vpc_empty(account: object, region: str):
             availability_zones = get_az_names(account.session, region)
             stups_names = ('Odd (SSH Bastion Host)',) + tuple(['NAT {}'.format(x) for x in availability_zones])
             if get_tag(instance.tags, 'Name') in stups_names:
+                return True
+            if get_tag(instance.tags, 'aws:cloudformation:logical-id') == 'OddServerInstance':
                 return True
         allocation_id = ni.get('Association', {}).get('AllocationId')
         if allocation_id:
