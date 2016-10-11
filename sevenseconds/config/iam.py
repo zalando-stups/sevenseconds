@@ -59,7 +59,8 @@ def configure_iam_policy(account: object):
                                     AssumeRolePolicyDocument=policy_document)
 
             with ActionOnExit('Updating policy for role {role_name}..', **vars()):
-                iam.RolePolicy(role_name, role_name).put(PolicyDocument=json.dumps(role_cfg['policy']))
+                policy_document = json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id)
+                iam.RolePolicy(role_name, role_name).put(PolicyDocument=policy_document)
 
             with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
                 for policy in iam.Role(role_name).policies.all():
