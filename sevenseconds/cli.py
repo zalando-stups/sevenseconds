@@ -5,7 +5,7 @@ import os
 
 import sevenseconds
 from clickclick import AliasedGroup
-from .helper import error, info
+from .helper import error, info, fatal_error
 from .helper.auth import get_sessions
 from .helper.network import get_trusted_addresses
 from .helper.regioninfo import get_regions
@@ -72,40 +72,17 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
         AWS_PROFILE     Connect to this Profile without SAML
         SSLDIR          Directory with all SSL-Files
     '''
-    config = yaml.safe_load(file)
-    accounts = config.get('accounts', {})
-    account_names = []
-    if len(account_name_pattern) == 0:
-        if os.environ.get('AWS_PROFILE'):
-            account_name_pattern = {os.environ.get('AWS_PROFILE')}
-        else:
-            error('No AWS accounts given!')
-            return
-
-    for pattern in account_name_pattern:
-        account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
-
-    if not account_names:
-        error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
+    try:
+        with_error, config, sessions = _get_session(
+            'configuration of: ',
+            file,
+            account_name_pattern,
+            saml_user,
+            saml_password,
+            options)
+    except:
         return
 
-    account_name_length = max([len(x) for x in account_names])
-    region_name_length = max([len(x) for x in get_regions('cloudtrail')])
-    sevenseconds.helper.PATTERNLENGTH = account_name_length + region_name_length + 2
-    sevenseconds.helper.QUITE = options.get('quite', False)
-
-    info('Start configuration of: {}'.format(', '.join(account_names)))
-
-    if not saml_user:
-        error('SAML User still missing. Please add with --saml-user or use the ENV SAML_USER')
-        return
-
-    sessions = get_sessions(account_names, saml_user, saml_password, config, accounts, options)
-    if len(sessions) == 0:
-        error('No AWS accounts with login!')
-        return
-    if options.get('login_only'):
-        return
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
     trusted_addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
     start_configuration(sessions, trusted_addresses, options)
@@ -140,6 +117,45 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
         Posible Enviroment Variables
         AWS_PROFILE     Connect to this Profile without SAML
     '''
+    try:
+        with_error, config, sessions = _get_session(
+            'cleanup of region {} in '.format(region),
+            file,
+            account_name_pattern,
+            saml_user,
+            saml_password,
+            options)
+    except:
+        return
+    start_cleanup(region, sessions, options)
+
+
+@cli.command('update-security-group')
+@click.argument('file', type=click.File('rb'))
+@click.argument('region')
+@click.argument('account_name_pattern')
+@click.argument('security_group', nargs=-1)
+@click.option('--saml-user', help='SAML username', envvar='SAML_USER', metavar='USERNAME')
+@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
+              envvar='SAML_PASSWORD',
+              metavar='PASSWORD')
+def cli_update_security_group(file, region, account_name_pattern, security_group, saml_user, saml_password):
+    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
+    try:
+        with_error, config, sessions = _get_session(
+            'update Secuity Group in region {} for '.format(region),
+            file,
+            [account_name_pattern],
+            saml_user,
+            saml_password)
+    except:
+        return
+    addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
+    info(', '.join(sorted(addresses)))
+    fatal_error('not implemented yet')
+
+
+def _get_session(msg, file, account_name_pattern, saml_user, saml_password, options):
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
     account_names = []
@@ -148,45 +164,33 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
             account_name_pattern = {os.environ.get('AWS_PROFILE')}
         else:
             error('No AWS accounts given!')
-            return
+            raise
 
     for pattern in account_name_pattern:
         account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
 
     if not account_names:
         error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
-        return
+        raise
 
     account_name_length = max([len(x) for x in account_names])
     region_name_length = max([len(x) for x in get_regions('cloudtrail')])
     sevenseconds.helper.PATTERNLENGTH = account_name_length + region_name_length + 2
     sevenseconds.helper.QUITE = options.get('quite', False)
 
+    info('Start {}{}'.format(msg, ', '.join(account_names)))
+
     if not saml_user:
         error('SAML User still missing. Please add with --saml-user or use the ENV SAML_USER')
-        return
-
-    info('Start cleanup of region {} in {}'.format(region, ', '.join(account_names)))
+        raise
 
     sessions = get_sessions(account_names, saml_user, saml_password, config, accounts, options)
     if len(sessions) == 0:
         error('No AWS accounts with login!')
-        return
+        raise
     if options.get('login_only'):
-        return
-    start_cleanup(region, sessions, options)
-
-
-@cli.command()
-@click.argument('file', type=click.File('rb'))
-@click.argument('region_name')
-@click.argument('security_group')
-def update_security_group(file, region_name, security_group):
-    '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
-    config = yaml.safe_load(file)
-    addresses = get_trusted_addresses(config)
-    info('\n'.join(sorted(addresses)))
-    update_security_group(region_name, security_group, addresses)
+        raise
+    return config, sessions
 
 
 def main():

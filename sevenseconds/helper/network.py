@@ -78,6 +78,9 @@ def get_trusted_addresses(session_data, config: dict):
         info('Adding trusted network {} ({})'.format(name, cidr))
         addresses.add(cidr)
 
+    if config.get('global', {}).get('trusted_networks_config', {}).get('disable_account_autogeneration', False):
+        return addresses
+
     for account_name, _cfg in accounts.items():
         cfg = {}
         cfg.update(config.get('global', {}))

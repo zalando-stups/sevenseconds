@@ -105,7 +105,7 @@ def configure_account_region(account: object, region: str, trusted_addresses: se
     configure_bastion_host(account, vpc, region)
     configure_elasticache(account.session, region, vpc)
     configure_rds(account.session, region, vpc)
-    configure_security_groups(account, region, trusted_addresses)
+    configure_security_groups(account, region, trusted_addresses, vpc)
 
 
 def start_cleanup(region: str, sessions: list, options: dict):
