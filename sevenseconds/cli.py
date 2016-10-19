@@ -73,7 +73,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
         SSLDIR          Directory with all SSL-Files
     '''
     try:
-        with_error, config, sessions = _get_session(
+        config, sessions = _get_session(
             'configuration of: ',
             file,
             account_name_pattern,
@@ -118,7 +118,7 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
         AWS_PROFILE     Connect to this Profile without SAML
     '''
     try:
-        with_error, config, sessions = _get_session(
+        config, sessions = _get_session(
             'cleanup of region {} in '.format(region),
             file,
             account_name_pattern,
@@ -142,7 +142,7 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
 def cli_update_security_group(file, region, account_name_pattern, security_group, saml_user, saml_password):
     '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
     try:
-        with_error, config, sessions = _get_session(
+        config, sessions = _get_session(
             'update Secuity Group in region {} for '.format(region),
             file,
             [account_name_pattern],
