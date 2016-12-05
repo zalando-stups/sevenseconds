@@ -50,7 +50,7 @@ def configure_iam_policy(account: object):
                        role.assume_role_policy_document == assume_role_policy_document):
                         continue
                     else:
-                        act.error('missmatch')
+                        act.error('mismatch')
                 except:
                     act.error('Failed')
 
@@ -58,7 +58,9 @@ def configure_iam_policy(account: object):
                 iam.Role(role_name).arn
             except:
                 with ActionOnExit('Creating role {role_name}..', **vars()):
-                    assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
+                    assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
+                        '{account_id}',
+                        account.id)
                     iam.create_role(Path=role_cfg.get('path', '/'),
                                     RoleName=role_name,
                                     AssumeRolePolicyDocument=assume_role_policy_document)
@@ -68,7 +70,9 @@ def configure_iam_policy(account: object):
                 iam.RolePolicy(role_name, role_name).put(PolicyDocument=policy_document)
 
             with ActionOnExit('Updating assume role policy for role {role_name}..', **vars()):
-                assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
+                assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
+                    '{account_id}',
+                    account.id)
                 iam.AssumeRolePolicy(role_name).update(PolicyDocument=assume_role_policy_document)
 
             with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
