@@ -39,12 +39,15 @@ def configure_iam_policy(account: object):
         else:
             with ActionOnExit('Checking role {role_name}..', **vars()) as act:
                 try:
-                    role_policy = iam.RolePolicy(role_name, role_name)
+                    role = iam.Role(role_name)
                     policy_document = json.loads(json.dumps(role_cfg.get('policy'))
                                                  .replace('{account_id}', account.id))
-                    if (role_policy.policy_document == policy_document and
-                       len(list(role_policy.Role().policies.all())) == 1 and
-                       len(list(iam.Role(role_name).attached_policies.all())) == 0):
+                    assume_role_policy_document = json.loads(json.dumps(role_cfg.get('assume_role_policy'))
+                                                             .replace('{account_id}', account.id))
+                    if (len(list(role.policies.all())) == 1 and
+                       len(list(role.attached_policies.all())) == 0 and
+                       role.Policy(role_name).policy_document == policy_document and
+                       role.assume_role_policy_document == assume_role_policy_document):
                         continue
                     else:
                         act.error('missmatch')
@@ -55,14 +58,18 @@ def configure_iam_policy(account: object):
                 iam.Role(role_name).arn
             except:
                 with ActionOnExit('Creating role {role_name}..', **vars()):
-                    policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
+                    assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
                     iam.create_role(Path=role_cfg.get('path', '/'),
                                     RoleName=role_name,
-                                    AssumeRolePolicyDocument=policy_document)
+                                    AssumeRolePolicyDocument=assume_role_policy_document)
 
             with ActionOnExit('Updating policy for role {role_name}..', **vars()):
                 policy_document = json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id)
                 iam.RolePolicy(role_name, role_name).put(PolicyDocument=policy_document)
+
+            with ActionOnExit('Updating assume role policy for role {role_name}..', **vars()):
+                assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id)
+                iam.AssumeRolePolicy(role_name).update(PolicyDocument=assume_role_policy_document)
 
             with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
                 for policy in iam.Role(role_name).policies.all():
@@ -84,15 +91,20 @@ def configure_iam_saml(account: object):
                 found = True
         if found:
             info('Found existing SAML provider {name}'.format(name=name))
-        else:
-            with ActionOnExit('Creating SAML provider {name}..', **vars()):
+            continue
+
+        with ActionOnExit('Creating SAML provider {name}..', **vars()):
+            if url.startswith('http'):
                 r = requests.get(url)
                 if r.status_code == 200:
                     saml_metadata_document = r.text
-                    iam.create_saml_provider(SAMLMetadataDocument=saml_metadata_document, Name=name)
                 else:
                     error('Error code: {}'.format(r.status_code))
                     error('Error msg: {}'.format(r.text))
+            else:
+                saml_metadata_document = url
+
+            iam.create_saml_provider(SAMLMetadataDocument=saml_metadata_document, Name=name)
 
 
 def configure_iam_certificate(session, dns_domain: str):
