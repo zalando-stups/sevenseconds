@@ -454,7 +454,7 @@ def terminitate_nat_instance(instance, az_name):
 
 def create_routing_tables(vpc: object, nat_instance_by_az: dict):
     for route_table in vpc.route_tables.all():
-        for association in route_table.associations.all():
+        for association in route_table.associations:
             if association.main:
                 for igw in vpc.internet_gateways.all():
                     route_table.create_route(DestinationCidrBlock='0.0.0.0/0',
