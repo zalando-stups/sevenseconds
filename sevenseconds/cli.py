@@ -37,10 +37,6 @@ def destroy(account_name, region):
 @cli.command()
 @click.argument('file', type=click.File('rb'))
 @click.argument('account_name_pattern', nargs=-1)
-@click.option('--saml-user', help='SAML username', envvar='SAML_USER', metavar='USERNAME')
-@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
-              envvar='SAML_PASSWORD',
-              metavar='PASSWORD')
 @click.option('--dry-run', is_flag=True)
 @click.option('-P', '--max-procs',
               help='Run  up  to  max-procs processes at a time. Default CPU Count',
@@ -57,7 +53,7 @@ def destroy(account_name, region):
               help='exit afert Login', is_flag=True)
 @click.option('--quite',
               help='log only errors', is_flag=True)
-def configure(file, account_name_pattern, saml_user, saml_password, **options):
+def configure(file, account_name_pattern, **options):
     '''Configure one or more AWS account(s) matching the provided pattern
 
        ACCOUNT_NAME_PATTERN are Unix shell style:
@@ -77,8 +73,6 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
             'configuration of: ',
             file,
             account_name_pattern,
-            saml_user,
-            saml_password,
             options)
     except:
         return
@@ -92,10 +86,6 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
 @click.argument('file', type=click.File('rb'))
 @click.argument('region')
 @click.argument('account_name_pattern', nargs=-1)
-@click.option('--saml-user', help='SAML username', envvar='SAML_USER', metavar='USERNAME')
-@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
-              envvar='SAML_PASSWORD',
-              metavar='PASSWORD')
 @click.option('--dry-run', is_flag=True)
 @click.option('-P', '--max-procs',
               help='Run  up  to  max-procs processes at a time. Default CPU Count',
@@ -103,7 +93,7 @@ def configure(file, account_name_pattern, saml_user, saml_password, **options):
               type=click.INT)
 @click.option('--quite',
               help='log only errors', is_flag=True)
-def clear_region(file, region, account_name_pattern, saml_user, saml_password, **options):
+def clear_region(file, region, account_name_pattern, **options):
     '''drop all stups service from region X
 
        ACCOUNT_NAME_PATTERN are Unix shell style:
@@ -122,8 +112,6 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
             'cleanup of region {} in '.format(region),
             file,
             account_name_pattern,
-            saml_user,
-            saml_password,
             options)
     except:
         return
@@ -135,19 +123,13 @@ def clear_region(file, region, account_name_pattern, saml_user, saml_password, *
 @click.argument('region')
 @click.argument('account_name_pattern')
 @click.argument('security_group', nargs=-1)
-@click.option('--saml-user', help='SAML username', envvar='SAML_USER', metavar='USERNAME')
-@click.option('--saml-password', help='SAML password (use the environment variable "SAML_PASSWORD")',
-              envvar='SAML_PASSWORD',
-              metavar='PASSWORD')
-def cli_update_security_group(file, region, account_name_pattern, security_group, saml_user, saml_password):
+def cli_update_security_group(file, region, account_name_pattern, security_group):
     '''Update a Security Group and allow access from all trusted networks, NAT instances and bastion hosts'''
     try:
         config, sessions = _get_session(
             'update Secuity Group in region {} for '.format(region),
             file,
-            [account_name_pattern],
-            saml_user,
-            saml_password)
+            [account_name_pattern])
     except:
         return
     addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
@@ -155,7 +137,7 @@ def cli_update_security_group(file, region, account_name_pattern, security_group
     fatal_error('not implemented yet')
 
 
-def _get_session(msg, file, account_name_pattern, saml_user, saml_password, options):
+def _get_session(msg, file, account_name_pattern, options):
     config = yaml.safe_load(file)
     accounts = config.get('accounts', {})
     account_names = []
@@ -180,11 +162,7 @@ def _get_session(msg, file, account_name_pattern, saml_user, saml_password, opti
 
     info('Start {}{}'.format(msg, ', '.join(account_names)))
 
-    if not saml_user:
-        error('SAML User still missing. Please add with --saml-user or use the ENV SAML_USER')
-        raise
-
-    sessions = get_sessions(account_names, saml_user, saml_password, config, accounts, options)
+    sessions = get_sessions(account_names, config, accounts, options)
     if len(sessions) == 0:
         error('No AWS accounts with login!')
         raise
