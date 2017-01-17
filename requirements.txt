@@ -11,3 +11,4 @@ datetime
 PyYAML
 beautifulsoup4>=4.4.1
 lxml
+PyJWT>=1.4.2
