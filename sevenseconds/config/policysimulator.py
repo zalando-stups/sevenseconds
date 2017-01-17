@@ -9,6 +9,9 @@ def check_policy_simulator(account: object):
     checks = account.config.get('roles_simulator', {})
     errorcount = 0
     for rolename, rolechecks in sorted(checks.items()):
+        if 'policy' not in roles[rolename]:
+            print('{} has no policy'.format(rolename))
+            continue
         errormsg = run_simulation(account.session, roles, rolename, rolechecks)
         if len(errormsg):
             errorcount += len(errormsg)
@@ -42,5 +45,5 @@ def run_simulation(session, roles, rolename, rolechecks):
                                                                       result['EvalDecision'],
                                                                       checkoptions['simulation_result']))
         if len(errormsg):
-            act.error('missmatch')
+            act.error('mismatch')
     return errormsg
