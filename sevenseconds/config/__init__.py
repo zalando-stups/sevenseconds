@@ -27,15 +27,16 @@ import sevenseconds.helper
 AccountData = namedtuple(
     'AccountData',
     (
-        'name',
-        'alias',
-        'id',
-        'session',
-        'admin_session',
-        'ami_session',
-        'config',
-        'dry_run',
-        'options'
+        'name',             # Short Name of this Account
+        'alias',            # Full AWS Account Alias Name (prefix + name)
+        'id',               # AWS Account ID
+        'session',          # Boto3 Session for the current Account
+        'admin_session',    # Boto3 Session for the Admin Account (for DNS deligation)
+        'ami_session',      # Boto3 Session of the Taupage Owner Accounts (for EC2 AMI)
+        'config',           # Configuration of the current Account
+        'dry_run',          # dry-run boolean Flag
+        'options',          # Command Options dict
+        'auth'              # OAuthServices Object (exp. for Account List and AWS Credentials Service)
     ))
 
 
