@@ -1,6 +1,6 @@
 import json
 import botocore.exceptions
-from ..helper import ActionOnExit, error
+from ..helper import ActionOnExit, error, warning
 
 
 def check_policy_simulator(account: object):
@@ -9,6 +9,9 @@ def check_policy_simulator(account: object):
     checks = account.config.get('roles_simulator', {})
     errorcount = 0
     for rolename, rolechecks in sorted(checks.items()):
+        if 'policy' not in roles[rolename]:
+            warning('{} has no policy'.format(rolename))
+            continue
         errormsg = run_simulation(account.session, roles, rolename, rolechecks)
         if len(errormsg):
             errorcount += len(errormsg)
