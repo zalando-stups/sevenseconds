@@ -39,7 +39,7 @@ def test_configure_nonexisting_multi_account(monkeypatch):
     assert 'No configuration found for account myaccount, dummyaccount' in result.output
 
 
-def test_configure(monkeypatch):
+def test_configure_missing_config_option(monkeypatch):
 
     myboto3 = MagicMock(list_account_aliases=lambda *args, **vargs: {'AccountAliases': ['myaccount']},
                         describe_availability_zones=lambda *args, **vargs: {
@@ -76,10 +76,6 @@ def test_configure(monkeypatch):
                 's3_key_prefix': 'myprefix'
             },
             'domain': '{account_name}.example.org',
-            'admin_account': 'mastermind',
-            'base_ami': {
-                'account_name': 'mastermind'
-            }
         },
         'accounts': {
             'myaccount': {},
@@ -92,6 +88,7 @@ def test_configure(monkeypatch):
         result = runner.invoke(cli, ['configure', 'config.yaml', 'my*'], catch_exceptions=False)
 
     assert 'Start configuration of: myaccount, mystaging' in result.output
+    assert 'Missing Option "admin_account" please set Account Name for Main-Account!' in result.output
     # Supports only SAML Login at the moment
     # assert 'Creating VPC for 172.31.0.0/16.. OK' in result.output
     # assert 'Enabling CloudTrail.. OK' in result.output
