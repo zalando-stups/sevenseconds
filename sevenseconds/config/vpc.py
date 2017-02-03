@@ -536,7 +536,7 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                                 options['RemoveRouteTableIds'] = list(rt_in_endpoint.difference(router_tables))
                             if router_tables.difference(rt_in_endpoint):
                                 options['AddRouteTableIds'] = list(router_tables.difference(rt_in_endpoint))
-                            act.warning('missmatch ({} vs. {}), make update: {}'.format(
+                            act.warning('mismatch ({} vs. {}), make update: {}'.format(
                                 rt_in_endpoint,
                                 router_tables,
                                 ec2c.modify_vpc_endpoint(**options))

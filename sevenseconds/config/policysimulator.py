@@ -42,5 +42,5 @@ def run_simulation(session, roles, rolename, rolechecks):
                                                                       result['EvalDecision'],
                                                                       checkoptions['simulation_result']))
         if len(errormsg):
-            act.error('missmatch')
+            act.error('mismatch')
     return errormsg
