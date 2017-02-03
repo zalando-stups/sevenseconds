@@ -1,4 +1,5 @@
-from ..helper import ActionOnExit, error, info
+from ..helper import ActionOnExit, error, info, warning
+from ..helper.aws import get_account_id
 
 
 def configure_dns(account: object):
@@ -33,20 +34,23 @@ def configure_dns(account: object):
                                                           'TTL': int(soa_ttl),
                                                           'ResourceRecords':rr}}]}
         conn.change_resource_record_sets(HostedZoneId=zone['Id'], ChangeBatch=changebatch)
+
+    if (account.id == get_account_id(account.admin_session)):
+        cleanup_delegation(account)
     return dns_domain
 
 
-def configure_dns_delegation(admin_session, domain, nameservers):
+def configure_dns_delegation(admin_session: object, domain: str, nameservers: list, action: str='UPSERT'):
     route53 = admin_session.client('route53')
     zone_id = find_zoneid(domain, route53)
     if zone_id:
         response = route53.change_resource_record_sets(
             HostedZoneId=zone_id,
             ChangeBatch={
-                'Comment': 'DNS Entry for Comodo DNS CNAME-based Domain Control Validation',
+                'Comment': 'DNS delegation for {}'.format(domain),
                 'Changes': [
                     {
-                        'Action': 'UPSERT',
+                        'Action': action,
                         'ResourceRecordSet': {
                             'Name': domain,
                             'Type': 'NS',
@@ -140,3 +144,56 @@ def find_zoneid(domain: str, route53: object):
         else:
             return id[0]
     return None
+
+
+def cleanup_delegation(account: object):
+    route53 = account.admin_session.client('route53')
+    account_list = account.auth.get_aws_accounts()
+    tld = account.config.get('domain').format(account_name='').strip('.')
+    zone_id = find_zoneid(tld, route53)
+
+    if not zone_id:
+        return
+
+    result = route53.list_resource_record_sets(
+        HostedZoneId=zone_id,
+        StartRecordName=tld,
+        StartRecordType='NS')
+    zone_entries = result['ResourceRecordSets']
+    while (result['IsTruncated'] and result['NextRecordType'] == 'NS'):
+        if 'NextRecordIdentifier' in result:
+            result = route53.list_resource_record_sets(
+                HostedZoneId=zone_id,
+                StartRecordName=result['NextRecordName'],
+                StartRecordType=result['NextRecordType'],
+                StartRecordIdentifier=result['NextRecordIdentifier']
+            )
+        else:
+            result = route53.list_resource_record_sets(
+                HostedZoneId=zone_id,
+                StartRecordName=result['NextRecordName'],
+                StartRecordType=result['NextRecordType']
+            )
+        zone_entries.extend(result['ResourceRecordSets'])
+
+    delegations = [x for x in zone_entries if x['Type'] == 'NS' and x['Name'] != tld + '.']
+    to_delete = []
+    for delegation in delegations:
+        subpart = delegation['Name'].split('.')[0]
+        matched = [x for x in account_list if x['name'] == subpart]
+        if len(matched) == 1:
+            # Enable/Disable
+            if matched[0]['disabled']:
+                to_delete.append(delegation)
+        elif len(matched) > 0:
+            error('Found more then 1 Account: {}'.format(matched))
+        else:
+            warning('Can\'t find an Account for "{}" (Nameservers: {})'.format(
+                delegation['Name'],
+                ', '.join([x['Value'] for x in delegation['ResourceRecords']])))
+    for old_delegation in to_delete:
+        configure_dns_delegation(
+            account.admin_session,
+            domain=old_delegation['Name'].strip('.'),
+            nameservers=[x['Value'] for x in old_delegation['ResourceRecords']],
+            action='DELETE')
