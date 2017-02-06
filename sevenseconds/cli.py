@@ -4,6 +4,7 @@ import yaml
 import os
 
 import sevenseconds
+from netaddr import IPNetwork
 from clickclick import AliasedGroup
 from .helper import error, info, fatal_error
 from .helper.auth import get_sessions
@@ -135,6 +136,36 @@ def cli_update_security_group(file, region, account_name_pattern, security_group
     addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
     info(', '.join(sorted(addresses)))
     fatal_error('not implemented yet')
+
+
+@cli.command('verify-trusted-networks')
+@click.argument('file', type=click.File('rb'))
+@click.argument('cidr-list', nargs=-1)
+def verify_trusted_networks(file, cidr_list):
+    '''Check if the given CIDR included in the trusted networks list
+
+    CIDR        One or more CIDR Network Blocks'''
+    config = yaml.safe_load(file)
+    addresses = set()
+    for name, net in config.get('global', {}).get('trusted_networks', {}).items():
+        addresses.add(IPNetwork(net))
+    found = []
+    not_found = []
+    for net in cidr_list:
+        cidr = IPNetwork(net)
+        overlaps = False
+        for trusted in addresses:
+            if cidr in trusted:
+                overlaps = True
+                break
+        if overlaps:
+            found.append(cidr)
+        else:
+            not_found.append(cidr)
+    if len(not_found):
+        print('Not mached:\n{}'.format('\n'.join([str(x) for x in sorted(set(not_found))])))
+    elif len(found) > 0 and len(not_found) == 0:
+        print('All Networks are matched!')
 
 
 def _get_session(msg, file, account_name_pattern, options):
