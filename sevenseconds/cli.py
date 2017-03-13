@@ -77,7 +77,8 @@ def configure(file, account_name_pattern, **options):
             file,
             account_name_pattern,
             options)
-    except:
+    except Exception as ex:
+        print(ex)
         return
 
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
