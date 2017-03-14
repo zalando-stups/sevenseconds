@@ -92,7 +92,7 @@ def test_configure_missing_config_option(monkeypatch):
     # Supports only SAML Login at the moment
     # assert 'Creating VPC for 172.31.0.0/16.. OK' in result.output
     # assert 'Enabling CloudTrail.. OK' in result.output
-    assert result.exit_code == 0
+    assert result.exit_code == 1
 
 
 if __name__ == '__main__':
