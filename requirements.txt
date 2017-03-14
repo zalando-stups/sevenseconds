@@ -1,6 +1,6 @@
-clickclick>=1.0
-boto3>=1.2.3
-botocore>=1.3.22
+clickclick>=1.2.1
+boto3>=1.4.4
+botocore>=1.5.26
 netaddr>=0.7.18
 requests>=2.9.1
 keyring
@@ -8,7 +8,4 @@ python-gnupg>=0.3.7
 python-dateutil
 datetime
 PyYAML
-beautifulsoup4>=4.4.1
-lxml
-PyJWT>=1.4.2
 stups-zign>=1.1.26

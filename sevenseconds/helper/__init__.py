@@ -6,7 +6,6 @@ from datetime import timedelta
 import time
 import threading
 
-CONFIG_DIR_PATH = click.get_app_dir('sevenseconds')
 START_TIME = time.time()
 THREADDATA = threading.local()
 PATTERNLENGTH = 25
