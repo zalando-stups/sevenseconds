@@ -5,36 +5,38 @@ import requests
 from ..helper import fatal_error, info, ActionOnExit, error
 
 
-def configure_iam(account: object, dns_domain: str):
-    configure_iam_policy(account)
+def configure_iam(account: object, dns_domain: str, isProfileSession: bool):
+    configure_iam_policy(account, isProfileSession)
     configure_iam_saml(account)
     configure_iam_certificate(account.session, dns_domain)
 
 
-def configure_iam_policy(account: object):
+def configure_iam_policy(account: object, isProfileSession: bool):
     iam = account.session.resource('iam')
-
     roles = account.config.get('roles', {})
 
     info('Account ID is {}'.format(account.id))
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
-            with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
-                try:
-                    iam.Role(role_name).arn
-                except:
-                    act.ok('not found')
-                else:
+            if role_cfg.get('only_unused', False) and isProfileSession:
+                pass
+            else:
+                with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
                     try:
-                        for policy in iam.Role(role_name).policies.all():
-                            policy.delete()
-                        for policy in iam.Role(role_name).attached_policies.all():
-                            policy.detach_role(RoleName=role_name)
-                        iam.Role(role_name).delete()
-                        act.ok('dropped')
-                    except Exception as e:
-                        act.error(e)
+                        iam.Role(role_name).arn
+                    except:
+                        act.ok('not found')
+                    else:
+                        try:
+                            for policy in iam.Role(role_name).policies.all():
+                                policy.delete()
+                            for policy in iam.Role(role_name).attached_policies.all():
+                                policy.detach_role(RoleName=role_name)
+                            iam.Role(role_name).delete()
+                            act.ok('dropped')
+                        except Exception as e:
+                            act.error(e)
 
         else:
             with ActionOnExit('Checking role {role_name}..', **vars()) as act:
