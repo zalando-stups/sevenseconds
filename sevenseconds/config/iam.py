@@ -5,13 +5,13 @@ import requests
 from ..helper import fatal_error, info, ActionOnExit, error
 
 
-def configure_iam(account: object, dns_domain: str, isProfileSession: bool):
-    configure_iam_policy(account, isProfileSession)
+def configure_iam(account: object, dns_domain: str, is_profile_session: bool):
+    configure_iam_policy(account, is_profile_session)
     configure_iam_saml(account)
     configure_iam_certificate(account.session, dns_domain)
 
 
-def configure_iam_policy(account: object, isProfileSession: bool):
+def configure_iam_policy(account: object, is_profile_session: bool):
     iam = account.session.resource('iam')
     roles = account.config.get('roles', {})
 
@@ -19,7 +19,7 @@ def configure_iam_policy(account: object, isProfileSession: bool):
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
-            if role_cfg.get('only_unused', False) and isProfileSession:
+            if role_cfg.get('only_unused', False) and is_profile_session:
                 pass
             else:
                 with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
