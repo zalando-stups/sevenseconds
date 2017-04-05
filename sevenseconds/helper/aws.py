@@ -12,7 +12,12 @@ def filter_subnets(vpc: object, _type: str):
 
 def get_account_alias(session):
     conn = session.client('iam')
-    return conn.list_account_aliases()['AccountAliases'][0]
+    return conn.list_account_aliases()['AccountAliases']
+
+
+def set_account_alias(session, alias):
+    conn = session.client('iam')
+    conn.create_account_alias(AccountAlias=alias)
 
 
 def get_account_id(session):
