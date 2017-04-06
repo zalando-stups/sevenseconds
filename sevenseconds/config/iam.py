@@ -3,26 +3,28 @@ import gnupg
 import json
 import requests
 from ..helper import fatal_error, info, ActionOnExit, error
+from pprint import pprint
 
-
-def configure_iam(account: object, dns_domain: str, is_profile_session: bool):
-    configure_iam_policy(account, is_profile_session)
+def configure_iam(account: object, dns_domain: str):
+    configure_iam_policy(account)
     configure_iam_saml(account)
     configure_iam_certificate(account.session, dns_domain)
 
 
-def configure_iam_policy(account: object, is_profile_session: bool):
+def configure_iam_policy(account: object):
     iam = account.session.resource('iam')
+    sts = account.session.client('sts')
     roles = account.config.get('roles', {})
+    current_arn = sts.get_caller_identity()['Arn']
 
     info('Account ID is {}'.format(account.id))
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
-            if role_cfg.get('only_unused', False) and is_profile_session:
-                pass
-            else:
-                with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
+            with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
+                if current_arn.startswith('arn:aws:sts::{}:assumed-role/{}/'.format(account.id, role_name)):
+                    act.warning('role in use')
+                else:
                     try:
                         iam.Role(role_name).arn
                     except:

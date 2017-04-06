@@ -67,7 +67,6 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     boto3.DEFAULT_SESSION = None
     # account_id = get_account_id(session['account'])
     # info('Account ID is {}'.format(account_id))
-    is_profile_session = 'profile_name' in session_data.session
     account_alias_from_aws = get_account_alias(account.session)
     if len(account_alias_from_aws) == 0:
         set_account_alias(account.session, account.alias)
@@ -80,7 +79,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
 
     configure_cloudtrail_all_regions(account)
     dns_domain = configure_dns(account)
-    configure_iam(account, dns_domain, is_profile_session)
+    configure_iam(account, dns_domain)
     configure_s3_buckets(account)
     configure_ses(account, dns_domain)
 

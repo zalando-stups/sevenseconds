@@ -21,32 +21,8 @@ def set_account_alias(session, alias):
 
 
 def get_account_id(session):
-    conn = session.client('iam')
-    try:
-        own_user = conn.get_user()['User']
-    except:
-        own_user = None
-    if not own_user:
-        roles = conn.list_roles()['Roles']
-        if not roles:
-            users = conn.list_users()['Users']
-            if not users:
-                with ActionOnExit('Creating temporary IAM role to determine account ID..'):
-                    temp_role_name = 'temp-sevenseconds-account-id'
-                    temp_policy = '''{'Statement': [{'Action': ['sts:AssumeRole'],
-                                                  'Effect': 'Allow',
-                                                  'Principal': {'Service': ['ec2.amazonaws.com']}}]}'''
-                    res = conn.create_role(RoleName=temp_role_name, AssumeRolePolicyDocument=temp_policy)
-                    arn = res['Role']['Arn']
-                    conn.delete_role(RoleName=temp_role_name)
-            else:
-                arn = [u['Arn'] for u in users][0]
-        else:
-            arn = [r['Arn'] for r in roles][0]
-    else:
-        arn = own_user['Arn']
-    account_id = arn.split(':')[4]
-    return account_id
+    sts = session.client('sts')
+    return sts.get_caller_identity()['Account']
 
 
 def get_az_names(session, region: str):
