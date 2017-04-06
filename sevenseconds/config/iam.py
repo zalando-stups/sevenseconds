@@ -13,28 +13,32 @@ def configure_iam(account: object, dns_domain: str):
 
 def configure_iam_policy(account: object):
     iam = account.session.resource('iam')
-
+    sts = account.session.client('sts')
     roles = account.config.get('roles', {})
+    current_arn = sts.get_caller_identity()['Arn']
 
     info('Account ID is {}'.format(account.id))
 
     for role_name, role_cfg in sorted(roles.items()):
         if role_cfg.get('drop', False):
             with ActionOnExit('Drop Role {role_name} if exist..', **vars()) as act:
-                try:
-                    iam.Role(role_name).arn
-                except:
-                    act.ok('not found')
+                if current_arn.startswith('arn:aws:sts::{}:assumed-role/{}/'.format(account.id, role_name)):
+                    act.warning('role in use')
                 else:
                     try:
-                        for policy in iam.Role(role_name).policies.all():
-                            policy.delete()
-                        for policy in iam.Role(role_name).attached_policies.all():
-                            policy.detach_role(RoleName=role_name)
-                        iam.Role(role_name).delete()
-                        act.ok('dropped')
-                    except Exception as e:
-                        act.error(e)
+                        iam.Role(role_name).arn
+                    except:
+                        act.ok('not found')
+                    else:
+                        try:
+                            for policy in iam.Role(role_name).policies.all():
+                                policy.delete()
+                            for policy in iam.Role(role_name).attached_policies.all():
+                                policy.detach_role(RoleName=role_name)
+                            iam.Role(role_name).delete()
+                            act.ok('dropped')
+                        except Exception as e:
+                            act.error(e)
 
         else:
             with ActionOnExit('Checking role {role_name}..', **vars()) as act:
