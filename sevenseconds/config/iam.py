@@ -3,7 +3,7 @@ import gnupg
 import json
 import requests
 from ..helper import fatal_error, info, ActionOnExit, error
-from pprint import pprint
+
 
 def configure_iam(account: object, dns_domain: str):
     configure_iam_policy(account)

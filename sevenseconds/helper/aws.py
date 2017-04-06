@@ -1,5 +1,3 @@
-from ..helper import ActionOnExit
-
 AZ_NAMES_BY_REGION = {}
 PENDING_ASSOCIATIONS = {}
 
