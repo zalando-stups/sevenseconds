@@ -56,6 +56,8 @@ def destroy(account_name, region):
               help='log only errors', is_flag=True)
 @click.option('--login-account',
               help='Log in with Account X and use AssumeRole for the other Accounts', type=click.STRING)
+@click.option('--token',
+              help='Oauth2 Token for AWS Credential Service', type=click.STRING)
 def configure(file, account_name_pattern, **options):
     '''Configure one or more AWS account(s) matching the provided pattern
 
@@ -98,6 +100,8 @@ def configure(file, account_name_pattern, **options):
               help='log only errors', is_flag=True)
 @click.option('--login-account',
               help='Log in with Account X and use AssumeRole for the other Accounts', type=click.STRING)
+@click.option('--token',
+              help='Oauth2 Token for AWS Credential Service', type=click.STRING)
 def clear_region(file, region, account_name_pattern, **options):
     '''drop all stups service from region X
 
