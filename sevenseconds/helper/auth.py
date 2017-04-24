@@ -27,7 +27,7 @@ class OAuthServices:
                  login_account: str,
                  role_name: str,
                  token: str):
-        if token != '':
+        if token:
             self.token = token
         else:
             self.token = zign.api.get_token('sevenseconds', ['uid'])
@@ -239,7 +239,7 @@ def get_sessions(account_names: list,
                 token_managed_id_key=cfg.get('token_managed_id_key'),
                 login_account=options.get('login_account', None),
                 role_name=saml_role,
-                token=options.get('token', '')
+                token=options.get('token')
             )
         if batch.get(aws_credentials_service_url) is None:
             batch[aws_credentials_service_url] = {}

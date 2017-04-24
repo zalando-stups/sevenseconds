@@ -79,8 +79,8 @@ def configure(file, account_name_pattern, **options):
             file,
             account_name_pattern,
             options)
-    except:
-        exit(1)
+    except Exception as e:
+        fatal_error("Can't get sessions. Error: {}".format(e))
 
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
     trusted_addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
@@ -122,8 +122,8 @@ def clear_region(file, region, account_name_pattern, **options):
             file,
             account_name_pattern,
             options)
-    except:
-        exit(1)
+    except Exception as e:
+        fatal_error("Can't get sessions. Error: {}".format(e))
 
     start_cleanup(region, sessions, options)
 
@@ -140,8 +140,8 @@ def cli_update_security_group(file, region, account_name_pattern, security_group
             'update Secuity Group in region {} for '.format(region),
             file,
             [account_name_pattern])
-    except:
-        exit(1)
+    except Exception as e:
+        fatal_error("Can't get sessions. Error: {}".format(e))
     addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
     info(', '.join(sorted(addresses)))
     fatal_error('not implemented yet')
