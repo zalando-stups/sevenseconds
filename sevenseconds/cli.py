@@ -2,6 +2,7 @@ import fnmatch
 import click
 import yaml
 import os
+import sys
 
 import sevenseconds
 from netaddr import IPNetwork
@@ -84,7 +85,9 @@ def configure(file, account_name_pattern, **options):
 
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
     trusted_addresses = get_trusted_addresses(list(sessions.values())[0].admin_session, config)
-    start_configuration(sessions, trusted_addresses, options)
+    run_successfully = start_configuration(sessions, trusted_addresses, options)
+    if not run_successfully:
+        sys.exit(1)
 
 
 @cli.command('clear-region')
