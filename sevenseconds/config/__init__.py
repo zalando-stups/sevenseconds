@@ -43,16 +43,21 @@ AccountData = namedtuple(
 def start_configuration(sessions: list, trusted_addresses: set, options: dict):
     info('Start Pool processing...')
     with Pool(processes=options.get('max_procs', os.cpu_count())) as pool:
-        pool.starmap(configure_account_except, zip(sessions.values(), repeat(trusted_addresses)))
-    info('Pool processing done... ')
+        run_successfully = pool.starmap(configure_account_except, zip(sessions.values(), repeat(trusted_addresses)))
+    info('Pool processing done...')
+    if all(run_successfully):
+        return True
+    return False
 
 
 def configure_account_except(session_data: AccountData, trusted_addresses: set):
     try:
         configure_account(session_data, trusted_addresses)
+        return True
     except Exception as e:
         error(traceback.format_exc())
         error(e)
+        return False
 
 
 def configure_account(session_data: AccountData, trusted_addresses: set):
