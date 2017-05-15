@@ -21,7 +21,7 @@ from .bastion import configure_bastion_host, delete_bastion_host
 from .elasticache import configure_elasticache
 from .rds import configure_rds
 from .securitygroup import configure_security_groups
-from ..helper.threading import ThreadWorker, Queue
+from concurrent.futures import ThreadPoolExecutor
 import sevenseconds.helper
 
 AccountData = namedtuple(
@@ -89,18 +89,13 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     configure_ses(account, dns_domain)
 
     regions = account.config['regions']
-    # Create a queue to communicate with the worker threads
-    queue = Queue()
-    # Create X worker threads
-    for x in range(len(regions)):
-        worker = ThreadWorker(queue, configure_account_region)
-        # Setting daemon to True will let the main thread exit even though the workers are blocking
-        worker.daemon = True
-        worker.start()
-    # Put the tasks into the queue as a tuple
-    for region in regions:
-        queue.put((account, region, trusted_addresses))
-    queue.join()
+
+    futures = []
+    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+        for region in regions:
+            futures.append(executor.submit(configure_account_region, account, region, trusted_addresses))
+    for future in futures:
+        future.result()
     ok('Done with {} / {} after {}'.format(account.id, account.name, timedelta(seconds=time.time() - start_time)))
 
 
