@@ -32,7 +32,7 @@ def configure_acm(account: object, region):
                             )
                 domain_options = {}
                 for options in cert['DomainValidationOptions']:
-                    domain_options[options['DomainName']] = options['ValidationDomain']
+                    domain_options[options['DomainName']] = options.get('ValidationDomain', options['DomainName'])
                 if domain_options == domains:
                     act.ok('found')
                     found_cert = True
