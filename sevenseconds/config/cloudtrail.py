@@ -1,6 +1,6 @@
 from ..helper import ActionOnExit, info
 from ..helper.regioninfo import get_regions
-from ..helper.threading import ThreadWorker, Queue
+from concurrent.futures import ThreadPoolExecutor
 import sevenseconds.helper
 
 DEFAULT_CLOUDTRAIL_REGION = 'eu-west-1'
@@ -26,18 +26,13 @@ def drop_old_cloudtrails(account):
     regions = get_regions('cloudtrail')
     if home_region in regions:
         regions.remove(home_region)
-    # Create a queue to communicate with the worker threads
-    queue = Queue()
-    # Create X worker threads
-    for x in range(len(regions)):
-        worker = ThreadWorker(queue, drop_old_cloudtrails_worker)
-        # Setting daemon to True will let the main thread exit even though the workers are blocking
-        worker.daemon = True
-        worker.start()
-    # Put the tasks into the queue as a tuple
-    for region in regions:
-        queue.put((account, region, account.dry_run))
-    queue.join()
+
+    futures = []
+    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+        for region in regions:
+            futures.append(executor.submit(drop_old_cloudtrails_worker, account, region, account.dry_run))
+    for future in futures:
+        future.result()
 
 
 def drop_old_cloudtrails_worker(account, region, dry_run):
