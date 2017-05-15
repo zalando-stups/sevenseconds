@@ -32,6 +32,7 @@ def drop_old_cloudtrails(account):
         for region in regions:
             futures.append(executor.submit(drop_old_cloudtrails_worker, account, region, account.dry_run))
     for future in futures:
+        # will raise an exception if the jobs failed
         future.result()
 
 

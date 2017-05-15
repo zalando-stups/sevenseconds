@@ -95,6 +95,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
         for region in regions:
             futures.append(executor.submit(configure_account_region, account, region, trusted_addresses))
     for future in futures:
+        # will raise an exception if the jobs failed
         future.result()
     ok('Done with {} / {} after {}'.format(account.id, account.name, timedelta(seconds=time.time() - start_time)))
 
