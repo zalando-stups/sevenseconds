@@ -502,7 +502,7 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
     service_names = ec2c.describe_vpc_endpoint_services()['ServiceNames']
 
     for service_name in service_names:
-        if service_name.endswith('.s3'):
+        if service_name.endswith('.s3') or service_name.endswith('.dynamodb'):
             with ActionOnExit('Checking S3 VPC Endpoints..') as act:
                 endpoints = ec2c.describe_vpc_endpoints(
                     Filters=[
