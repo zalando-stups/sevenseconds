@@ -92,9 +92,10 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     regions = account.config['regions']
 
     futures = []
-    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
-        for region in regions:
-            futures.append(executor.submit(configure_account_region, account, region, trusted_addresses))
+    if len(regions) > 0:
+        with ThreadPoolExecutor(max_workers=len(regions)) as executor:
+            for region in regions:
+                futures.append(executor.submit(configure_account_region, account, region, trusted_addresses))
     for future in futures:
         # will raise an exception if the jobs failed
         future.result()
