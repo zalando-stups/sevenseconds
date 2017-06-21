@@ -8,7 +8,7 @@ def configure_kms_keys(account: object):
     for key_alias in keys_config:
         key_config = keys_config[key_alias]
         key = json.loads(json.dumps(key_config)
-                                .replace('{account_id}', account.id))
+            .replace('{account_id}', account.id))
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
             exist_aliases = kms_client.list_aliases()
             found = False
@@ -20,14 +20,14 @@ def configure_kms_keys(account: object):
                         KeyId=alias['TargetKeyId'],
                         PolicyName='default',
                         Policy=json.dumps(key['KeyPolicy']),
-                        BypassPolicyLockoutSafetyCheck=False                        
+                        BypassPolicyLockoutSafetyCheck=False
                     )
                     if put_key_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                         act.error(
                             'failed to update key policy for {} response: {}'
-                                .format(key_alias, create_response)
+                            .format(key_alias, put_key_response)
                         )
-                        break  
+                        break
                     act.ok("updated key policy for {}".format(key_alias))
                     break
             if not found:
@@ -50,6 +50,6 @@ def configure_kms_keys(account: object):
                 if alias_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                     act.error(
                         'failed to create alias {} with key {} res:{}'
-                            .format(key_alias, key_id, alias_response)
+                        .format(key_alias, key_id, alias_response)
                     )
                     continue
