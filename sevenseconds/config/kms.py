@@ -1,5 +1,6 @@
 from ..helper import ActionOnExit
 
+
 def configure_kms_keys(account: object):
     key_config = account.config.get('kms')
     kms_client = account.session.client('kms')
@@ -7,7 +8,7 @@ def configure_kms_keys(account: object):
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
             key_tags = key_config[key_alias]['tags']
             converted_tags = []
-            for tag in key_tags: 
+            for tag in key_tags:
                 for key in tag:
                     converted_tags.append({'TagKey': key, 'TagValue': tag[key]})
             # check if the key is present
@@ -15,7 +16,7 @@ def configure_kms_keys(account: object):
             found = False
             for alias in exist_aliases['Aliases']:
                 if alias['AliasName'] == key_alias:
-                    found=True
+                    found = True
                     act.ok('key already exists')
             if not found:
                 create_response = kms_client.create_key(
@@ -34,5 +35,7 @@ def configure_kms_keys(account: object):
                     TargetKeyId=key_id
                 )
                 if alias_response['ResponseMetadata']['HTTPStatusCode'] != 200:
-                    act.error('failed to create a key {} with key_id {} response: {}'.format(key_alias, key_id, alias_response))
+                    act.error(
+                        'failed to create alias {} with key_id {} response: {}'.format(key_alias, key_id, alias_response)
+                    )
                     return
