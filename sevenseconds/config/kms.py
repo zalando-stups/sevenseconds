@@ -36,6 +36,6 @@ def configure_kms_keys(account: object):
                 )
                 if alias_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                     act.error(
-                        'failed to create alias {} with key_id {} response: {}'.format(key_alias, key_id, alias_response)
+                        'failed to create alias {} with key {} res:{}'.format(key_alias, key_id, alias_response)
                     )
                     return
