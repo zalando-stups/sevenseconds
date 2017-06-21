@@ -7,8 +7,7 @@ def configure_kms_keys(account: object):
     kms_client = account.session.client('kms')
     for key_alias in keys_config:
         key_config = keys_config[key_alias]
-        key = json.loads(json.dumps(key_config)
-            .replace('{account_id}', account.id))
+        key = json.loads(json.dumps(key_config).replace('{account_id}', account.id))
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
             exist_aliases = kms_client.list_aliases()
             found = False
