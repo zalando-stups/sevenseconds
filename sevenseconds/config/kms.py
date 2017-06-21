@@ -4,7 +4,7 @@ def configure_kms_keys(account: object):
     key_config = account.config.get('kms')
     kms_client = account.session.client('kms')
     for key_alias in key_config:
-        with ActionOnExit('Searching for key "{}" AMI..'.format(key_alias)) as act:
+        with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
             key_tags = key_config[key_alias]['tags']
             converted_tags = []
             for tag in key_tags: 
