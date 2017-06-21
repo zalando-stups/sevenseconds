@@ -1,6 +1,6 @@
 from ..helper import ActionOnExit
 
-def create_deployment_key(account: object):
+def configure_kms_keys(account: object):
     key_config = account.config.get('kms')
     kms_client = account.session.client('kms')
     for key_alias in key_config:
