@@ -1,34 +1,47 @@
 from ..helper import ActionOnExit
+import json
 
 
 def configure_kms_keys(account: object):
-    key_config = account.config.get('kms')
+    keys_config = account.config.get('kms')
     kms_client = account.session.client('kms')
-    for key_alias in key_config:
+    for key_alias in keys_config:
+        key_config = keys_config[key_alias]
+        key = json.loads(json.dumps(key_config)
+                                .replace('{account_id}', account.id))
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
-            key_tags = key_config[key_alias]['tags']
-            converted_tags = []
-            for tag in key_tags:
-                for key in tag:
-                    converted_tags.append({'TagKey': key, 'TagValue': tag[key]})
-            # check if the key is present
             exist_aliases = kms_client.list_aliases()
             found = False
             for alias in exist_aliases['Aliases']:
                 if alias['AliasName'] == key_alias:
                     found = True
-                    act.ok('key already exists')
+                    act.ok('key already exists, updating policy')
+                    put_key_response = kms_client.put_key_policy(
+                        KeyId=alias['TargetKeyId'],
+                        PolicyName='default',
+                        Policy=json.dumps(key['KeyPolicy']),
+                        BypassPolicyLockoutSafetyCheck=False                        
+                    )
+                    if put_key_response['ResponseMetadata']['HTTPStatusCode'] != 200:
+                        act.error(
+                            'failed to update key policy for {} response: {}'
+                                .format(key_alias, create_response)
+                        )
+                        break  
+                    act.ok("updated key policy for {}".format(key_alias))
+                    break
             if not found:
                 create_response = kms_client.create_key(
-                    Description='key used by deployment pipeline for secret encryption/decryption',
-                    KeyUsage='ENCRYPT_DECRYPT',
+                    Description=key['Description'],
+                    KeyUsage=key['KeyUsage'],
                     Origin='AWS_KMS',
                     BypassPolicyLockoutSafetyCheck=False,
-                    Tags=converted_tags
+                    Policy=json.dumps(key['KeyPolicy']),
+                    Tags=key['Tags']
                 )
                 if create_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                     act.error('failed to create a key {} response: {}'.format(key_alias, create_response))
-                    return
+                    continue
                 key_id = create_response['KeyMetadata']['KeyId']
                 alias_response = kms_client.create_alias(
                     AliasName=key_alias,
@@ -36,6 +49,7 @@ def configure_kms_keys(account: object):
                 )
                 if alias_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                     act.error(
-                        'failed to create alias {} with key {} res:{}'.format(key_alias, key_id, alias_response)
+                        'failed to create alias {} with key {} res:{}'
+                            .format(key_alias, key_id, alias_response)
                     )
-                    return
+                    continue
