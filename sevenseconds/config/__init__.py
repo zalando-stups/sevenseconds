@@ -15,6 +15,7 @@ from .acm import configure_acm
 from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
+from .kms import create_deployment_key
 from .cloudwatch import configure_log_group
 from .vpc import configure_vpc, if_vpc_empty, cleanup_vpc, delete_nat_host
 from .bastion import configure_bastion_host, delete_bastion_host
@@ -86,6 +87,7 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     dns_domain = configure_dns(account)
     configure_iam(account, dns_domain)
     configure_s3_buckets(account)
+    create_deployment_key(account)
     configure_ses(account, dns_domain)
 
     regions = account.config['regions']
