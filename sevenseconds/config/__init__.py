@@ -15,6 +15,7 @@ from .acm import configure_acm
 from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
+from .kms import configure_kms_keys
 from .cloudwatch import configure_log_group
 from .vpc import configure_vpc, if_vpc_empty, cleanup_vpc, delete_nat_host
 from .bastion import configure_bastion_host, delete_bastion_host
@@ -104,6 +105,7 @@ def configure_account_region(account: object, region: str, trusted_addresses: se
     sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
     configure_log_group(account.session, region)
     configure_acm(account, region)
+    configure_kms_keys(account, region)
     vpc = configure_vpc(account, region)
     configure_bastion_host(account, vpc, region)
     configure_elasticache(account.session, region, vpc)
