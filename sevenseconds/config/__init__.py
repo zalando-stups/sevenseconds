@@ -87,7 +87,6 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     dns_domain = configure_dns(account)
     configure_iam(account, dns_domain)
     configure_s3_buckets(account)
-    configure_kms_keys(account)
     configure_ses(account, dns_domain)
 
     regions = account.config['regions']
@@ -106,6 +105,7 @@ def configure_account_region(account: object, region: str, trusted_addresses: se
     sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
     configure_log_group(account.session, region)
     configure_acm(account, region)
+    configure_kms_keys(account, region)
     vpc = configure_vpc(account, region)
     configure_bastion_host(account, vpc, region)
     configure_elasticache(account.session, region, vpc)

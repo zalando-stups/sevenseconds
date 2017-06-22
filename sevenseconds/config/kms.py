@@ -2,9 +2,9 @@ from ..helper import ActionOnExit
 import json
 
 
-def configure_kms_keys(account: object):
-    keys_config = account.config.get('kms')
-    kms_client = account.session.client('kms')
+def configure_kms_keys(account: object, region):
+    keys_config = account.config.get('kms', {})
+    kms_client = account.session.client('kms', region)
     for key_alias in keys_config:
         key_config = keys_config[key_alias]
         key = json.loads(json.dumps(key_config).replace('{account_id}', account.id))
