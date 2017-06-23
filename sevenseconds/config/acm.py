@@ -1,4 +1,5 @@
 from ..helper import ActionOnExit, info
+import datetime
 
 
 def configure_acm(account: object, region):
@@ -32,6 +33,18 @@ def configure_acm(account: object, region):
                             )
                 elif cert['Status'] != 'ISSUED':
                     continue
+                if datetime.timedelta(weeks=4) > cert['NotAfter'] - datetime.datetime.now(cert['NotAfter'].tzinfo):
+                    with ActionOnExit('Renew Certificate {}. Resend Validation...'
+                                      .format(cert['CertificateArn'])) as act_renew:
+                        for d in cert["DomainValidationOptions"]:
+                            try:
+                                acm.resend_validation_email(
+                                    CertificateArn=cert['CertificateArn'],
+                                    Domain=d["DomainName"],
+                                    ValidationDomain=d["ValidationDomain"]
+                                )
+                            except Exception as e:
+                                act_renew.error('found existing config')
                 domain_options = {}
                 for options in cert['DomainValidationOptions']:
                     domain_options[options['DomainName']] = options.get('ValidationDomain', options['DomainName'])
