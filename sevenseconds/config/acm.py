@@ -30,6 +30,8 @@ def configure_acm(account: object, region):
                                 Domain=d["DomainName"],
                                 ValidationDomain=d["ValidationDomain"]
                             )
+                elif cert['Status'] != 'ISSUED':
+                    continue
                 domain_options = {}
                 for options in cert['DomainValidationOptions']:
                     domain_options[options['DomainName']] = options.get('ValidationDomain', options['DomainName'])
