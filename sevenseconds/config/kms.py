@@ -21,9 +21,9 @@ def configure_kms_keys(account: object, region):
                     found = True
                     act.ok('key already exists, updating policy')
                     put_key_response = kms_client.put_key_policy(
-                        KeyId=alias['TargetKeyId'],
+                        KeyId=alias['target_key_id'],
                         PolicyName='default',
-                        Policy=json.dumps(key['KeyPolicy']),
+                        Policy=json.dumps(key['key_policy']),
                         BypassPolicyLockoutSafetyCheck=False
                     )
                     if put_key_response['ResponseMetadata']['HTTPStatusCode'] != 200:
@@ -36,12 +36,12 @@ def configure_kms_keys(account: object, region):
                     break
             if not found:
                 create_response = kms_client.create_key(
-                    Description=key['Description'],
-                    KeyUsage=key['KeyUsage'],
+                    Description=key['description'],
+                    KeyUsage=key['key_usage'],
                     Origin='AWS_KMS',
                     BypassPolicyLockoutSafetyCheck=False,
-                    Policy=json.dumps(key['KeyPolicy']),
-                    Tags=key['Tags']
+                    Policy=json.dumps(key['key_policy']),
+                    Tags=key['tags']
                 )
                 if create_response['ResponseMetadata']['HTTPStatusCode'] != 200:
                     act.error('failed to create a key {} response: {}'.format(key_alias, create_response))
