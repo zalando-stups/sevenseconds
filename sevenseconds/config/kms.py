@@ -9,7 +9,7 @@ def configure_kms_keys(account: object, region):
     kms_client = account.session.client('kms', region)
     for key_alias in keys_config:
         key_config = keys_config[key_alias]
-        if 'Drop' in key_config and key_config['Drop']:
+        if key_config.get('drop', False):
             schedule_key_deletion(kms_client, key_alias)
             continue
         key = json.loads(json.dumps(key_config).replace('{account_id}', account.id))
@@ -60,7 +60,6 @@ def configure_kms_keys(account: object, region):
 
 
 def schedule_key_deletion(kms_client, key_alias):
-    key_alias = "alias/foo-bar"
     with ActionOnExit('Checking deletion status for key "{}"..'.format(key_alias)) as act:
         try:
             describe_key_response = kms_client.describe_key(
