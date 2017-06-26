@@ -21,7 +21,7 @@ def configure_kms_keys(account: object, region):
                     found = True
                     act.ok('key already exists, updating policy')
                     put_key_response = kms_client.put_key_policy(
-                        KeyId=alias['target_key_id'],
+                        KeyId=alias['TargetKeyId'],
                         PolicyName='default',
                         Policy=json.dumps(key['key_policy']),
                         BypassPolicyLockoutSafetyCheck=False
