@@ -2,6 +2,7 @@ from ..helper import ActionOnExit
 from botocore.exceptions import ClientError
 import json
 
+
 # TODO:support reverting Drop:true operation by either cancelling deletion or recreating the keys
 def configure_kms_keys(account: object, region):
     keys_config = account.config.get('kms', {})
@@ -56,6 +57,7 @@ def configure_kms_keys(account: object, region):
                         .format(key_alias, key_id, alias_response)
                     )
                     continue
+
 
 def schedule_key_deletion(kms_client, key_alias):
     key_alias = "alias/foo-bar"
