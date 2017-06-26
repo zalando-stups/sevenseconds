@@ -1,12 +1,15 @@
 from ..helper import ActionOnExit
 import json
 
-
+# TODO:support reverting Drop:true operation by either cancelling deletion or recreating the keys
 def configure_kms_keys(account: object, region):
     keys_config = account.config.get('kms', {})
     kms_client = account.session.client('kms', region)
     for key_alias in keys_config:
         key_config = keys_config[key_alias]
+        if 'Drop' in key_config and key_config['Drop']:
+            schedule_key_deletion(kms_client, key_alias)
+            continue
         key = json.loads(json.dumps(key_config).replace('{account_id}', account.id))
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
             exist_aliases = kms_client.list_aliases()
@@ -52,3 +55,23 @@ def configure_kms_keys(account: object, region):
                         .format(key_alias, key_id, alias_response)
                     )
                     continue
+
+def schedule_key_deletion(kms_client, key_alias):
+    with ActionOnExit('Checking deletion status for key "{}"..'.format(key_alias)) as act:
+        describe_key_response = kms_client.describe_key(
+            KeyId=key_alias
+        )
+        if describe_key_response['KeyMetadata']['KeyState'] == 'PendingDeletion':
+            act.ok('key {} is already scheduled for deletion'.format(key_alias))
+            return
+        schedule_response = kms_client.schedule_key_deletion(
+                                KeyId=describe_key_response['KeyMetadata']['KeyId'],
+                                PendingWindowInDays=7,
+                            )
+        if schedule_response['ResponseMetadata']['HTTPStatusCode'] != 200:
+            act.error(
+                'failed to schedule key {} for deletion'
+                .format(key_alias)
+            )
+            return
+        act.ok('successfully scheduled key {} for deletion'.format(key_alias))
