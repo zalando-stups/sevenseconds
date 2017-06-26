@@ -1,4 +1,5 @@
 from ..helper import ActionOnExit
+from botocore.exceptions import ClientError
 import json
 
 # TODO:support reverting Drop:true operation by either cancelling deletion or recreating the keys
@@ -57,10 +58,18 @@ def configure_kms_keys(account: object, region):
                     continue
 
 def schedule_key_deletion(kms_client, key_alias):
+    key_alias = "alias/foo-bar"
     with ActionOnExit('Checking deletion status for key "{}"..'.format(key_alias)) as act:
-        describe_key_response = kms_client.describe_key(
-            KeyId=key_alias
-        )
+        try:
+            describe_key_response = kms_client.describe_key(
+                KeyId=key_alias
+            )
+        except ClientError as ex:
+            if ex.response['Error']['Code'] == 'NotFoundException':
+                act.ok('key {} cannot be found, probably deleted'.format(key_alias))
+                return
+            else:
+                raise ex
         if describe_key_response['KeyMetadata']['KeyState'] == 'PendingDeletion':
             act.ok('key {} is already scheduled for deletion'.format(key_alias))
             return
