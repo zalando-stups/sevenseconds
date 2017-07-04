@@ -3,7 +3,7 @@ import json
 import re
 import hashlib
 from netaddr import IPNetwork
-from ..helper import ActionOnExit, info, warning
+from ..helper import ActionOnExit, info, warning, error
 from ..helper.network import calculate_subnet
 from ..helper.aws import filter_subnets, get_tag, get_az_names, associate_address
 from .ami import get_base_ami_id
@@ -86,6 +86,7 @@ def configure_vpc(account, region):
     nat_instances = create_nat_instances(account, vpc, region)
     create_routing_tables(vpc, nat_instances)
     create_vpc_endpoints(account, vpc, region)
+    check_vpn_propagation(account, vpc, region)
     return vpc
 
 
@@ -554,6 +555,35 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                             ).encode('utf-8')).hexdigest()
                     }
                     act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
+
+
+def check_vpn_propagation(account: object, vpc: object, region: str):
+    ec2c = account.session.client('ec2', region)
+    for vpn_gateway in ec2c.describe_vpn_gateways(Filters=[
+        {
+            'Name': 'attachment.vpc-id',
+            'Values': [
+                vpc.id,
+            ]
+        },
+    ]).get('VpnGateways', []):
+        for route_table in vpc.route_tables.all():
+            msg = '{} | {} Route Propagation {} | {}: '.format(
+                    route_table.id,
+                    get_tag(route_table.tags, 'Name'),
+                    vpn_gateway['VpnGatewayId'],
+                    get_tag(vpn_gateway['Tags'], 'Name'))
+            if is_vgw_propagation_active(route_table.propagating_vgws, vpn_gateway['VpnGatewayId']):
+                info('{} {}'.format(msg, 'Yes'))
+            else:
+                error('{} {}'.format(msg, 'No'))
+
+
+def is_vgw_propagation_active(propagating_vgws: list, vgw_id: str):
+    for propagated_vgw in propagating_vgws:
+        if propagated_vgw.get('GatewayId', 'none') == vgw_id:
+            return True
+    return False
 
 
 def if_vpc_empty(account: object, region: str):
