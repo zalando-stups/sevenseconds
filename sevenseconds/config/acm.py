@@ -33,7 +33,7 @@ def configure_acm(account: object, region):
                             )
                 elif cert['Status'] != 'ISSUED':
                     continue
-                if datetime.timedelta(weeks=4) > cert['NotAfter'] - datetime.datetime.now(cert['NotAfter'].tzinfo):
+                if 'NotAfter' in cert and datetime.timedelta(weeks=4) > cert['NotAfter'] - datetime.datetime.now(cert['NotAfter'].tzinfo):
                     with ActionOnExit('Renew Certificate {}. Resend Validation...'
                                       .format(cert['CertificateArn'])) as act_renew:
                         for d in cert["DomainValidationOptions"]:
