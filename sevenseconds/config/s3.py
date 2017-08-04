@@ -9,9 +9,7 @@ def configure_s3_buckets(account: object):
             s3 = account.session.resource('s3', region)
             with ActionOnExit('Checking S3 bucket {}..'.format(bucket_name)) as act:
                 bucket = s3.Bucket(bucket_name)
-                try:
-                    bucket.creation_date
-                except:
+                if not bucket.creation_date:
                     act.warning('not exist.. create bucket ..')
                     bucket.create(CreateBucketConfiguration={'LocationConstraint': region})
                     bucket.wait_until_exists()
@@ -40,9 +38,7 @@ def configure_s3_buckets(account: object):
 def create_logging_target(s3: object, logging_target: str, region: str):
     with ActionOnExit('Check logging target {}'.format(logging_target)) as act:
         logging_bucket = s3.Bucket(logging_target)
-        try:
-            logging_bucket.creation_date
-        except:
+        if not bucket.creation_date:
             act.warning('not exist.. create bucket ..')
             logging_bucket.create(CreateBucketConfiguration={'LocationConstraint': region})
             logging_bucket.wait_until_exists()
