@@ -548,7 +548,8 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                         'ServiceName': service_name,
                         'RouteTableIds': list(router_tables),
                         'ClientToken': hashlib.md5(
-                            '{}-{}:{}'.format(
+                            '{}-{}-{}:{}'.format(
+                                service_name,
                                 region,
                                 vpc.id,
                                 sorted(list(router_tables))
