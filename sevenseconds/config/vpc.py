@@ -573,7 +573,7 @@ def check_vpn_propagation(account: object, vpc: object, region: str):
                     route_table.id,
                     get_tag(route_table.tags, 'Name'),
                     vpn_gateway['VpnGatewayId'],
-                    get_tag(vpn_gateway['Tags'], 'Name'))
+                    get_tag(vpn_gateway.get('Tags', {}), 'Name'))
             if is_vgw_propagation_active(route_table.propagating_vgws, vpn_gateway['VpnGatewayId']):
                 info('{} {}'.format(msg, 'Yes'))
             else:
