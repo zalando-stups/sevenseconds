@@ -122,7 +122,7 @@ def configure_bastion_host(account: object, vpc: object, region: str):
         try:
             stack = cf.Stack('Odd')
             info('Stack Status: {}'.format(stack.stack_status))
-        except:
+        except Exception:
             create_cf_bastion_host(account, vpc, region, ami_id, bastion_version)
         if stack.stack_status in ('UPDATE_IN_PROGRESS', 'CREATE_IN_PROGRESS'):
             if stack.stack_status.startswith('UPDATE_'):
@@ -341,7 +341,7 @@ def configure_bastion_host_deprecated(account: object, vpc: object, region: str)
     # account_name: str, dns_domain: str, ec2_conn, subnets: list, cfg: dict, vpc_net: IPNetwork
     try:
         subnet = list(filter_subnets(vpc, 'dmz'))[0]
-    except:
+    except Exception:
         warning('No DMZ subnet found')
         return
 
@@ -524,7 +524,7 @@ def wait_for_ssh_port(host: str, timeout: int):
             sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             try:
                 result = sock.connect_ex((host, 22))
-            except:
+            except Exception:
                 result = -1
             if result == 0:
                 return True
@@ -546,7 +546,7 @@ def delete_bastion_host(account: object, region: str):
                 if instance.public_ip_address:
                     try:
                         delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
-                    except:
+                    except Exception:
                         pass
                 drop_bastionhost(instance)
 

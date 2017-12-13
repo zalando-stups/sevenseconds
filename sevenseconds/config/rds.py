@@ -22,7 +22,7 @@ def configure_rds(session, region, vpc):
                     DBSubnetGroupDescription='Default subnet group using all internal subnets',
                     SubnetIds=subnet_ids
                 )
-    except:
+    except Exception:
         with ActionOnExit('Creating RDS subnet group..'):
             client.create_db_subnet_group(
                 DBSubnetGroupName='internal',

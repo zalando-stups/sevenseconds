@@ -12,7 +12,6 @@ from .policysimulator import check_policy_simulator
 from .cloudtrail import configure_cloudtrail_all_regions
 from .route53 import configure_dns
 from .acm import configure_acm
-from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .kms import configure_kms_keys
@@ -87,7 +86,6 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     dns_domain = configure_dns(account)
     configure_iam(account, dns_domain)
     configure_s3_buckets(account)
-    configure_ses(account, dns_domain)
 
     regions = account.config['regions']
 

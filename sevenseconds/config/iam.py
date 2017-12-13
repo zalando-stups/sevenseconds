@@ -27,7 +27,7 @@ def configure_iam_policy(account: object):
                 else:
                     try:
                         iam.Role(role_name).arn
-                    except:
+                    except Exception:
                         act.ok('not found')
                     else:
                         try:
@@ -55,12 +55,12 @@ def configure_iam_policy(account: object):
                         continue
                     else:
                         act.error('mismatch')
-                except:
+                except Exception:
                     act.error('Failed')
 
             try:
                 iam.Role(role_name).arn
-            except:
+            except Exception:
                 with ActionOnExit('Creating role {role_name}..', **vars()):
                     assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
                         '{account_id}',
@@ -160,7 +160,7 @@ def configure_iam_certificate(session, dns_domain: str):
                         PrivateKey=private_key,
                         CertificateChain=cert_chain
                     )
-                except:
+                except Exception:
                     with open(dir + 'trusted_chain.pem') as fd:
                         cert_chain = fd.read()
                     iam.create_server_certificate(

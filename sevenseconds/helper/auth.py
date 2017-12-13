@@ -86,7 +86,7 @@ class OAuthServices:
         if self.use_master_account:
             try:
                 return self.get_aws_credentials_from_master_account(account_name, role_name)
-            except:
+            except Exception:
                 error('[{}] No matching role found for account {}/{}. Try profile from ~/.aws/credentials'
                       .format(account_name, account_name, role_name))
                 return self.get_aws_credentials_from_profile(account_name)

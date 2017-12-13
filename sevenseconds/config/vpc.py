@@ -284,7 +284,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
             ]
             nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
             support_nat_gateway = True
-        except:
+        except Exception:
             support_nat_gateway = False
         while len(nat_gateway) and nat_gateway[0]['State'] == 'deleting':
             warning('Nat Gateway in {} is deleting.. waiting..'.format(az_name))
