@@ -87,7 +87,6 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     dns_domain = configure_dns(account)
     configure_iam(account, dns_domain)
     configure_s3_buckets(account)
-    configure_ses(account, dns_domain)
 
     regions = account.config['regions']
 
