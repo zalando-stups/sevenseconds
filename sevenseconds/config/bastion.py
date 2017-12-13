@@ -546,7 +546,7 @@ def delete_bastion_host(account: object, region: str):
                 if instance.public_ip_address:
                     try:
                         delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
-                    except:
+                    except Exception:
                         pass
                 drop_bastionhost(instance)
 
