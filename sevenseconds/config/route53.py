@@ -18,7 +18,7 @@ def configure_dns(account: object):
     with ActionOnExit('Set up DNS Delegation..') as act:
         try:
             configure_dns_delegation(account.admin_session, dns_domain, nameservers)
-        except:
+        except Exception:
             raise
             act.error('DNS Delegation not possible')
     soa_ttl = account.config.get('domain_soa_ttl', '60')
@@ -139,7 +139,7 @@ def find_zoneid(domain: str, route53: object):
         if not id:
             try:
                 domain = '.'.join(domain.split('.')[1:])
-            except:
+            except Exception:
                 domain = ''
         else:
             return id[0]

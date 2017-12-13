@@ -58,7 +58,7 @@ def get_address(domain):
     with ActionOnExit('Checking {}'.format(domain)) as act:
         try:
             ai = socket.getaddrinfo(domain, 443, family=socket.AF_INET, type=socket.SOCK_STREAM)
-        except:
+        except Exception:
             ai = []
             act.error('n/a')
             pass
