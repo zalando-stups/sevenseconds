@@ -12,7 +12,6 @@ from .policysimulator import check_policy_simulator
 from .cloudtrail import configure_cloudtrail_all_regions
 from .route53 import configure_dns
 from .acm import configure_acm
-from .ses import configure_ses
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .kms import configure_kms_keys
