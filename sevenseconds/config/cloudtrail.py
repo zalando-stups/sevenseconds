@@ -93,6 +93,25 @@ def configure_cloudtrail(account: object):
             if not account.dry_run:
                 cloudtrail.create_trail(**kwargs)
                 cloudtrail.start_logging(Name=name)
+    with ActionOnExit('Enable Lambda data events..') as act:
+        if not account.dry_run:
+            cloudtrail.put_event_selectors(
+                TrailName=name,
+                EventSelectors=[
+                    {
+                        'ReadWriteType': 'All',
+                        'IncludeManagementEvents': True,
+                        'DataResources': [
+                            {
+                                'Type': 'AWS::Lambda::Function',
+                                'Values': [
+                                    'arn:aws:lambda',
+                                ]
+                            },
+                        ]
+                    },
+                ]
+            )
 
 
 def find_trail(trails: list, name):
