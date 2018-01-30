@@ -13,7 +13,7 @@ global:
   domain: "{account_name}.example.org"
   # base Taupage AMI to search for
   base_ami:
-    name: "Taupage-AMI-*"
+    default_channel: "Taupage-AMI-*"
     is_public: false
     # account_id of the AMI creator
     onwer_id: 123456789123

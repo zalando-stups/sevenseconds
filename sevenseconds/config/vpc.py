@@ -6,7 +6,6 @@ from netaddr import IPNetwork
 from ..helper import ActionOnExit, info, warning, error
 from ..helper.network import calculate_subnet
 from ..helper.aws import filter_subnets, get_tag, get_az_names, associate_address
-from .ami import get_base_ami_id
 from .route53 import configure_dns_record, delete_dns_record
 from clickclick import OutputFormat
 from clickclick.console import print_table
@@ -14,7 +13,7 @@ from clickclick.console import print_table
 VPC_NET = IPNetwork('172.31.0.0/16')
 
 
-def configure_vpc(account, region):
+def configure_vpc(account, region, base_ami_id):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
     vpc_net = VPC_NET
@@ -46,14 +45,13 @@ def configure_vpc(account, region):
                 vpc.attach_internet_gateway(InternetGatewayId=igw.id)
     with ActionOnExit('Updating VPC..'):
         if not account.dry_run:
-            ami_id = get_base_ami_id(account, region)
             tags = [{'Key': 'Name', 'Value': '{}-{}'.format(account.name, region)},
                     {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
                     ]
             for key, val in account.config.get('vpc', {}).get('tags', {}).items():
                 tags.append({
                     'Key': key,
-                    'Value': val.replace('{{ami_id}}', ami_id).replace(
+                    'Value': val.replace('{{ami_id}}', base_ami_id).replace(
                         '{{base_ami_config}}',
                         json.dumps(account.config.get('base_ami'), sort_keys=True))
                 })
