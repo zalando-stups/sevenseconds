@@ -36,6 +36,12 @@ def calculate_subnet(vpc_net: IPNetwork, _type: str, az_index: int):
     >>> calculate_subnet(IPNetwork('10.0.0.0/28'), 'internal', 1)
     IPNetwork('10.0.0.9/32')
 
+    >>> calculate_subnet(IPNetwork('10.31.0.0/16'), 'nat', 1)
+    IPNetwork('10.31.64.16/28')
+
+    >>> calculate_subnet(IPNetwork('10.31.0.0/16'), 'nat', 0)
+    IPNetwork('10.31.64.0/28')
+
     >>> calculate_subnet(IPNetwork('10.0.0.0/30'), 'internal', 1)
     Traceback (most recent call last):
         ...
@@ -48,8 +54,10 @@ def calculate_subnet(vpc_net: IPNetwork, _type: str, az_index: int):
     '''
     if _type == 'dmz':
         networks = list(vpc_net.subnet(vpc_net.prefixlen + 5))
+    elif _type == 'nat':
+        networks = list(list(vpc_net.subnet(vpc_net.prefixlen + 2))[1].subnet(28))
     else:
-        # use the "upper half" of the /16 network for the internal/private subnets
+        # use the "lower half" of the /16 network for the internal/private subnets
         networks = list(list(vpc_net.subnet(vpc_net.prefixlen + 1))[1].subnet(vpc_net.prefixlen + 4))
     return networks[az_index]
 

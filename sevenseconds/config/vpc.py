@@ -84,7 +84,9 @@ def configure_vpc(account, region):
             configure_subnet(vpc, az, _type, net, account.dry_run, ec2c.get_waiter('subnet_available'))
 
     nat_instances = create_nat_instances(account, vpc, region)
-    create_routing_tables(vpc, nat_instances)
+    create_routing_tables(vpc, nat_instances,
+                          account.options.get('readd_defaultroute', False),
+                          account.config.get('enable_dedicated_dmz_route', False))
     create_vpc_endpoints(account, vpc, region)
     check_vpn_propagation(account, vpc, region)
     return vpc
@@ -217,6 +219,7 @@ def delete_rds_subnet_group(session: object, region: str):
 
 def configure_subnet(vpc, az, _type: str, cidr: IPNetwork, dry_run: bool, waiter):
     name = '{}-{}'.format(_type, az)
+    tags = []
     subnet = find_subnet(vpc, cidr)
     if not subnet:
         with ActionOnExit('Creating subnet {name} with {cidr}..', **vars()):
@@ -229,10 +232,12 @@ def configure_subnet(vpc, az, _type: str, cidr: IPNetwork, dry_run: bool, waiter
                      'Values': [az]}
                 ])
                 # We are to fast for AWS (InvalidSubnetID.NotFound)
-                subnet.create_tags(Tags=[
-                    {'Key': 'Name',
-                     'Value': name}
-                ])
+                tags.append({'Key': 'Name', 'Value': name})
+    if _type == 'dmz':
+        tags.append({'Key': 'kubernetes.io/role/elb', 'Value': ''})
+        tags.append({'Key': 'kubernetes.io/role/internal-elb', 'Value': ''})
+    if tags:
+        subnet.create_tags(Tags=tags)
 
 
 def find_subnet(vpc: object, cidr):
@@ -358,7 +363,7 @@ def create_nat_instances(account: object, vpc: object, region: str):
                     response = ec2c.create_nat_gateway(
                         SubnetId=subnet.id,
                         AllocationId=allocation_id,
-                        ClientToken=sg_name
+                        ClientToken='{}-{}'.format(sg_name, subnet.id)
                     )
                     info(response)
                     nat_instance_by_az[az_name] = {'NatGatewayId': response['NatGateway']['NatGatewayId']}
@@ -453,22 +458,38 @@ def terminitate_nat_instance(instance, az_name):
         instance.wait_until_terminated()
 
 
-def create_routing_tables(vpc: object, nat_instance_by_az: dict):
+def create_routing_tables(vpc: object, nat_instance_by_az: dict,
+                          replace_default_route: bool, enable_dedicated_dmz_route: bool):
     for route_table in vpc.route_tables.all():
         for association in route_table.associations:
             if association.main:
                 for igw in vpc.internet_gateways.all():
                     route_table.create_route(DestinationCidrBlock='0.0.0.0/0',
                                              GatewayId=igw.id)
-                route_table.create_tags(Tags=[{'Key': 'Name', 'Value': 'DMZ Routing Table'}])
+                # FIXME: Can we change the name of the default routing table?
+                route_table.create_tags(
+                    Tags=[{'Key': 'Name', 'Value': 'DMZ Routing Table'}])
 
-    for subnet in filter_subnets(vpc, 'internal'):
+    configure_routing_table(vpc, nat_instance_by_az,
+                            replace_default_route, 'internal', False)
+    if enable_dedicated_dmz_route:
+        configure_routing_table(vpc, nat_instance_by_az,
+                                replace_default_route, 'dmz', True)
+
+
+def configure_routing_table(vpc: object, nat_instance_by_az: dict, replace_default_route: bool,
+                            filter_name: str, route_via_igw: bool):
+    for subnet in filter_subnets(vpc, filter_name):
         route_table = None
         for rt in vpc.route_tables.all():
             if get_tag(rt.tags, 'Name', 'undef-rt-name') == get_tag(subnet.tags, 'Name', 'undef-subnet-name'):
                 route_table = rt
                 break
-        destination = nat_instance_by_az.get(subnet.availability_zone)
+        if route_via_igw:
+            for igw in vpc.internet_gateways.all():
+                destination = {'GatewayId': igw.id}
+        else:
+            destination = nat_instance_by_az.get(subnet.availability_zone)
         if destination is None:
             warning('Skip routing table for {} (no destination)')
             continue
@@ -483,18 +504,28 @@ def create_routing_tables(vpc: object, nat_instance_by_az: dict):
             found_default_route = False
             for route in route_table.routes:
                 if route.destination_cidr_block == '0.0.0.0/0':
-                    if route.state == 'blackhole':
-                        act.warning('replace route')
+                    if route.state == 'blackhole' or replace_default_route:
+                        act.warning('delete old default destination')
                         vpc.meta.client.delete_route(RouteTableId=route_table.id,
                                                      DestinationCidrBlock='0.0.0.0/0')
                     else:
                         found_default_route = True
             if not found_default_route:
-                act.warning('fix default route')
+                act.warning('add new default destination')
                 route_table.create_route(DestinationCidrBlock='0.0.0.0/0',
                                          **destination)
         with ActionOnExit('Associating route table..'):
             route_table.associate_with_subnet(SubnetId=subnet.id)
+            route_table.create_tags(Tags=[
+                {
+                    'Key': 'AvailabilityZone',
+                    'Value': subnet.availability_zone
+                },
+                {
+                    'Key': 'Type',
+                    'Value': filter_name
+                }
+            ])
 
 
 def create_vpc_endpoints(account: object, vpc: object, region: str):
@@ -556,6 +587,8 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
                             ).encode('utf-8')).hexdigest()
                     }
                     act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
+        else:
+            info('found new possible service endpoint: {}'.format(service_name))
 
 
 def check_vpn_propagation(account: object, vpc: object, region: str):
