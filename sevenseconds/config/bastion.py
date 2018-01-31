@@ -560,8 +560,8 @@ def delete_bastion_host(account: object, region: str):
         if instance.public_ip_address:
             try:
                 delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
-            except:
-                pass
+            except Exception as e:
+                warning('Can\'t cleanup old Odd host name: {}'.format(e))
         oddstack = cf.Stack(get_tag(instance.tags, 'aws:cloudformation:stack-name'))
         oddstack.delete()
         waiter = cfc.get_waiter('stack_delete_complete')
