@@ -557,6 +557,11 @@ def delete_bastion_host(account: object, region: str):
          'Values': ['running', 'pending', 'stopping', 'stopped']},
     ]
     for instance in ec2.instances.filter(Filters=cloudformation_filter):
+        if instance.public_ip_address:
+            try:
+                delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
+            except:
+                pass
         oddstack = cf.Stack(get_tag(instance.tags, 'aws:cloudformation:stack-name'))
         oddstack.delete()
         waiter = cfc.get_waiter('stack_delete_complete')
