@@ -85,7 +85,7 @@ def configure_vpc(account, region):
 
     nat_instances = create_nat_instances(account, vpc, region)
     create_routing_tables(vpc, nat_instances,
-                          account.options.get('readd_defaultroute', False),
+                          account.options.get('re_add_defaultroute', False),
                           account.config.get('enable_dedicated_dmz_route', False))
     create_vpc_endpoints(account, vpc, region)
     check_vpn_propagation(account, vpc, region)

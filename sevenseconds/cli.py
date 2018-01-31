@@ -51,7 +51,7 @@ def destroy(account_name, region):
               metavar='<REGEX>')
 @click.option('--migrate2natgateway-if-empty',
               help='Drop NAT Instance and create NAT Gateway, if no other Instance running', is_flag=True)
-@click.option('--readd-defaultroute',
+@click.option('--re-add-defaultroute',
               help='Drop and re-add the default route of the internal subnet (NETWORK OUTAGE!)', is_flag=True)
 @click.option('--login-only',
               help='exit afert Login', is_flag=True)
