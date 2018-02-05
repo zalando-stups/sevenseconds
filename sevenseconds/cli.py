@@ -80,13 +80,13 @@ def configure(file, account_name_pattern, **options):
             file,
             account_name_pattern,
             options)
-        sessions = list(sessions.values())
+        session_list = list(sessions.values())
     except Exception as e:
         fatal_error("Can't get sessions. Error: {}".format(e))
 
     # Get NAT/ODD Addresses. Need the first Session to get all AZ for the Regions
-    trusted_addresses = get_trusted_addresses(sessions[0].admin_session, config)
-    run_successfully = start_configuration(sessions, trusted_addresses, options)
+    trusted_addresses = get_trusted_addresses(session_list[0].admin_session, config)
+    run_successfully = start_configuration(session_list, trusted_addresses, options)
     if not run_successfully:
         sys.exit(1)
 
