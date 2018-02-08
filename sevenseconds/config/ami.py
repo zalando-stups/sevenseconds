@@ -1,11 +1,10 @@
-import functools
-from ..helper import info, ActionOnExit
+from ..helper import ActionOnExit
 
 
 def latest_ami(session: object, region: str, config: dict, channel: str):
     ec2 = session.resource('ec2', region)
 
-    with ActionOnExit('Searching for latest "{}" AMI..'.format(channel)) as act:
+    with ActionOnExit('Searching for latest "{}" AMI..'.format(channel)):
         filters = {"name": channel,
                    "is-public": "true" if config['is_public'] else "false",
                    "state": "available",
@@ -36,7 +35,7 @@ def configure_base_images(account: object, region: str, latest_images: dict):
 
     image_ids = list(filter(None, latest_images.values()))
 
-    with ActionOnExit('Checking that all AMIs ({}) are available...'.format(', '.join(image_ids))) as act:
+    with ActionOnExit('Checking that all AMIs ({}) are available...'.format(', '.join(image_ids))):
         available_images = set(image.id for image in ec2.images.filter(ImageIds=image_ids))
         pending_image_ids = [image for image in image_ids if image not in available_images]
 

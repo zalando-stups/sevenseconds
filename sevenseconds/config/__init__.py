@@ -77,7 +77,7 @@ def prepare_shared_data(sessions: list, trusted_addresses: set):
             if region not in images:
                 images[region] = latest_base_images(ami_session, region, ami_config)
                 if default_channel not in images[region]:
-                    raise Exception("Unable to find default base AMI ({}) for region {}".format(default_channel, region))
+                    raise Exception("Unable to find default base AMI {} for region {}".format(default_channel, region))
     return SharedData(images, trusted_addresses)
 
 
