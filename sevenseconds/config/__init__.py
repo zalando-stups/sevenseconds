@@ -12,6 +12,7 @@ from .policysimulator import check_policy_simulator
 from .cloudtrail import configure_cloudtrail_all_regions
 from .route53 import configure_dns
 from .acm import configure_acm
+from .ami import latest_base_images, configure_base_images
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .kms import configure_kms_keys
@@ -39,20 +40,50 @@ AccountData = namedtuple(
         'auth'              # OAuthServices Object (exp. for Account List and AWS Credentials Service)
     ))
 
+SharedData = namedtuple(
+    'SharedData',
+    (
+        'base_images',      # {region -> {channel -> ami_id}}
+        'trusted_addresses'
+    ))
+
 
 def start_configuration(sessions: list, trusted_addresses: set, options: dict):
     info('Start Pool processing...')
+
+    # TODO move trusted_addresses to prepare_shared_data
+    shared_data = prepare_shared_data(sessions, trusted_addresses)
+
     with Pool(processes=options.get('max_procs', os.cpu_count())) as pool:
-        run_successfully = pool.starmap(configure_account_except, zip(sessions.values(), repeat(trusted_addresses)))
+        run_successfully = pool.starmap(configure_account_except, zip(sessions, repeat(shared_data)))
     info('Pool processing done...')
     if all(run_successfully):
         return True
     return False
 
 
-def configure_account_except(session_data: AccountData, trusted_addresses: set):
+def prepare_shared_data(sessions: list, trusted_addresses: set):
+    """Returns the latest AMI IDs for each configured channel for all used regions"""
+    ami_session = boto3.session.Session(**sessions[0].ami_session)
+    ami_config = sessions[0].config['base_ami']
+    default_channel = ami_config['default_channel']
+
+    images = {}
+    for session in sessions:
+        if session.config['base_ami'] != ami_config:
+            raise Exception("base_ami config overrides are unsupported")
+
+        for region in session.config['regions']:
+            if region not in images:
+                images[region] = latest_base_images(ami_session, region, ami_config)
+                if default_channel not in images[region]:
+                    raise Exception("Unable to find default base AMI {} for region {}".format(default_channel, region))
+    return SharedData(images, trusted_addresses)
+
+
+def configure_account_except(session_data: AccountData, shared_data: SharedData):
     try:
-        configure_account(session_data, trusted_addresses)
+        configure_account(session_data, shared_data)
         return True
     except Exception as e:
         error(traceback.format_exc())
@@ -60,7 +91,7 @@ def configure_account_except(session_data: AccountData, trusted_addresses: set):
         return False
 
 
-def configure_account(session_data: AccountData, trusted_addresses: set):
+def configure_account(session_data: AccountData, shared_data: SharedData):
     start_time = time.time()
     sevenseconds.helper.THREADDATA.name = session_data.name
     session = {}
@@ -93,23 +124,28 @@ def configure_account(session_data: AccountData, trusted_addresses: set):
     if len(regions) > 0:
         with ThreadPoolExecutor(max_workers=len(regions)) as executor:
             for region in regions:
-                futures.append(executor.submit(configure_account_region, account, region, trusted_addresses))
+                futures.append(executor.submit(configure_account_region, account, region, shared_data))
     for future in futures:
         # will raise an exception if the jobs failed
         future.result()
     ok('Done with {} / {} after {}'.format(account.id, account.name, timedelta(seconds=time.time() - start_time)))
 
 
-def configure_account_region(account: object, region: str, trusted_addresses: set):
+def configure_account_region(account: object, region: str, shared_data: SharedData):
     sevenseconds.helper.THREADDATA.name = '{}|{}'.format(account.name, region)
+
+    base_images = shared_data.base_images.get(region, {})
+    default_base_ami = base_images[account.config['base_ami']['default_channel']]
+
     configure_log_group(account.session, region)
     configure_acm(account, region)
     configure_kms_keys(account, region)
-    vpc = configure_vpc(account, region)
-    configure_bastion_host(account, vpc, region)
+    configure_base_images(account, region, base_images)
+    vpc = configure_vpc(account, region, default_base_ami)
+    configure_bastion_host(account, vpc, region, default_base_ami)
     configure_elasticache(account.session, region, vpc)
     configure_rds(account.session, region, vpc)
-    configure_security_groups(account, region, trusted_addresses, vpc)
+    configure_security_groups(account, region, shared_data.trusted_addresses, vpc)
 
 
 def start_cleanup(region: str, sessions: list, options: dict):
