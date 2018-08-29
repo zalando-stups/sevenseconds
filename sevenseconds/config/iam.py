@@ -44,12 +44,16 @@ def configure_iam_policy(account: object):
             with ActionOnExit('Checking role {role_name}..', **vars()) as act:
                 try:
                     role = iam.Role(role_name)
+                    # TODO make policy optional
                     policy_document = json.loads(json.dumps(role_cfg.get('policy'))
                                                  .replace('{account_id}', account.id))
                     assume_role_policy_document = json.loads(json.dumps(role_cfg.get('assume_role_policy'))
                                                              .replace('{account_id}', account.id))
+                    policy_arns = role_cfg.get('policy_arns', [])
+
+                    # if nothing to do, skip
                     if (len(list(role.policies.all())) == 1 and
-                       len(list(role.attached_policies.all())) == 0 and
+                       sorted(role.attached_policies.all()) == sorted(policy_arns) and
                        role.Policy(role_name).policy_document == policy_document and
                        role.assume_role_policy_document == assume_role_policy_document):
                         continue
@@ -65,9 +69,11 @@ def configure_iam_policy(account: object):
                     assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
                         '{account_id}',
                         account.id)
-                    iam.create_role(Path=role_cfg.get('path', '/'),
+                    role = iam.create_role(Path=role_cfg.get('path', '/'),
                                     RoleName=role_name,
                                     AssumeRolePolicyDocument=assume_role_policy_document)
+                    for arn in role_cfg.get('policy_arns', []):
+                        role.attach_policy(PolicyArn=arn)
 
             with ActionOnExit('Updating policy for role {role_name}..', **vars()):
                 policy_document = json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id)
