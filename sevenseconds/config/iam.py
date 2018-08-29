@@ -69,9 +69,11 @@ def configure_iam_policy(account: object):
                     assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
                         '{account_id}',
                         account.id)
-                    role = iam.create_role(Path=role_cfg.get('path', '/'),
-                                    RoleName=role_name,
-                                    AssumeRolePolicyDocument=assume_role_policy_document)
+                    role = iam.create_role(
+                        Path=role_cfg.get('path', '/'),
+                        RoleName=role_name,
+                        AssumeRolePolicyDocument=assume_role_policy_document)
+
                     for arn in role_cfg.get('policy_arns', []):
                         role.attach_policy(PolicyArn=arn)
 
