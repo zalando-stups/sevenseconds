@@ -40,7 +40,7 @@ def configure_dns(account: object):
     return dns_domain
 
 
-def configure_dns_delegation(admin_session: object, domain: str, nameservers: list, action: str='UPSERT'):
+def configure_dns_delegation(admin_session: object, domain: str, nameservers: list, action: str = 'UPSERT'):
     route53 = admin_session.client('route53')
     zone_id = find_zoneid(domain, route53)
     if zone_id:

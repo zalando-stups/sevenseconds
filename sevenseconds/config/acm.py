@@ -58,7 +58,7 @@ def renew_certificate(acm, cert):
                     Domain=d["DomainName"],
                     ValidationDomain=d["ValidationDomain"]
                 )
-            except Exception as e:
+            except Exception:
                 act_renew.error('found existing config')
 
 
