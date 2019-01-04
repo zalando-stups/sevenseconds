@@ -10,7 +10,6 @@ import os
 import inspect
 from distutils.cmd import Command
 
-import versioneer
 import setuptools
 from setuptools.command.test import test as TestCommand
 from setuptools import setup
@@ -22,9 +21,16 @@ if sys.version_info < (3, 4, 0):
 __location__ = os.path.join(os.getcwd(), os.path.dirname(inspect.getfile(inspect.currentframe())))
 
 
+def read_version(package):
+    data = {}
+    with open(os.path.join(package, '__init__.py'), 'r') as fd:
+        exec(fd.read(), data)
+    return data['__version__']
+
+
 NAME = 'stups-sevenseconds'
 MAIN_PACKAGE = 'sevenseconds'
-VERSION = versioneer.get_version()
+VERSION = read_version(MAIN_PACKAGE)
 DESCRIPTION = 'Configure AWS accounts'
 LICENSE = 'Apache License 2.0'
 URL = 'https://github.com/zalando-stups/sevenseconds'
@@ -34,6 +40,7 @@ EMAIL = 'henning.jacobs@zalando.de'
 COVERAGE_XML = True
 COVERAGE_HTML = False
 JUNIT_XML = False
+
 
 # Add here all kinds of additional classifiers as defined under
 # https://pypi.python.org/pypi?%3Aaction=list_classifiers
@@ -153,10 +160,7 @@ def read(fname):
 
 
 def setup_package():
-    # Assemble additional setup commands
-    cmdclass = versioneer.get_cmdclass()
-    cmdclass['docs'] = sphinx_builder()
-    cmdclass['doctest'] = sphinx_builder()
+    cmdclass = {}
     cmdclass['test'] = PyTest
 
     docs_path = os.path.join(__location__, 'docs')
