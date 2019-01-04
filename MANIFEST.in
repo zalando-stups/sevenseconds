@@ -2,5 +2,3 @@ include *.txt
 include *.rst
 recursive-include sevenseconds *.py
 recursive-include docs *.rst *.py
-include versioneer.py
-include sevenseconds/_version.py
