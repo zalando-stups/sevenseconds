@@ -77,8 +77,8 @@ class OAuthServices:
         for item in self._profiles:
             if item['account_name'] == account_name and item['role_name'] == role_name:
                 return item
-
-        return None
+        else:
+            raise RuntimeError('Unable to find the role: {} for account: {}'.format(role_name, account_name))
 
     def get_aws_credentials(self, account_name, role_name):
         '''Requests the specified AWS Temporary Credentials'''
