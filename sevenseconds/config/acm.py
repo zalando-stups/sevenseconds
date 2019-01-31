@@ -58,11 +58,16 @@ def renew_certificate(acm, cert):
                     Domain=d["DomainName"],
                     ValidationDomain=d["ValidationDomain"]
                 )
-            except Exception as e:
+            except Exception:
                 act_renew.error('found existing config')
 
 
 def resend_validation_email(acm, cert):
+    renewal_status = cert.get('RenewalSummary', {}).get('RenewalStatus')
+    if renewal_status != 'PENDING_VALIDATION':
+        info('Certificate {} in {}, not resending validation email'.format(cert['CertificateArn'], renewal_status))
+        return
+
     with ActionOnExit('Certificate {} still Pending. Resend Validation...'
                       .format(cert['CertificateArn'])):
         for d in cert["DomainValidationOptions"]:

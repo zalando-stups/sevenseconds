@@ -65,7 +65,7 @@ def get_tag(tags: list, key: str, default=None, prefix=''):
     return default
 
 
-def associate_address(ec2c: object, instance_id: str=None):
+def associate_address(ec2c: object, instance_id: str = None):
     addr = None
     for vpc_addresse in ec2c.describe_addresses()['Addresses']:
         if (vpc_addresse.get('AssociationId') is None and
