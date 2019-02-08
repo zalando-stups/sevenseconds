@@ -32,7 +32,7 @@ def configure_s3_buckets(account: object):
                 else:
                     logging_bucket = create_logging_target(s3, logging_target, region)
                     enable_logging(bucket, logging_bucket)
-                configure_log_lifecycle(s3, lifecycle_config, logging_target)
+                configure_bucket_lifecycle(s3, lifecycle_config, logging_target)
 
 
 def create_logging_target(s3: object, logging_target: str, region: str):
@@ -58,10 +58,10 @@ def enable_logging(bucket: object, logging_bucket: object):
         )
 
 
-def configure_log_lifecycle(s3: object, lifecycle_config: dict, logging_target: str):
-    with ActionOnExit('Check lifecycle for logging target {}'.format(logging_target)) as act:
+def configure_bucket_lifecycle(s3: object, lifecycle_config: dict, bucket: str):
+    with ActionOnExit('Check lifecycle for bucket {}'.format(bucket)) as act:
         if lifecycle_config:
-            logging_lifecycle = s3.BucketLifecycle(logging_target)
+            logging_lifecycle = s3.BucketLifecycle(bucket)
             logging_lifecycle.put(LifecycleConfiguration=lifecycle_config)
         else:
             act.warning('skip')
