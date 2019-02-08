@@ -2,6 +2,7 @@ import pytest
 from unittest.mock import MagicMock
 from sevenseconds.helper.aws import get_account_id, get_az_names
 from sevenseconds.config.cloudtrail import configure_cloudtrail
+from sevenseconds.config.s3 import configure_s3_buckets
 from datetime import datetime
 import botocore.exceptions
 
@@ -127,6 +128,38 @@ def test_configure_cloudtrail(monkeypatch):
                 'S3KeyPrefix': 'dummy'
             }]}
     configure_cloudtrail(account)
+
+
+def test_configure_s3_buckets():
+    config = {
+        's3_buckets': {
+            'bucket-1': {
+                'name': 'bucket-1',
+                'regions': ['eu-central-1'],
+                'lifecycle_configuration': {'Rules': [{'x': 'y'}]},
+                'encryption_config': {'Rules': [{'a': 'b'}]},
+                'tags': {'foo': 'bar', 'bee': 'baz'}
+            }
+        }
+    }
+    account = MagicMock(config=config)
+    s3 = account.session.resource('s3', 'eu-central-1')
+    bucket = s3.Bucket('bucket-1')
+    bucket.creation_date = None
+
+    configure_s3_buckets(account)
+
+    bucket.create.assert_called_once()
+    s3.BucketLifecycle('bucket-1').put.assert_called_once_with(
+        LifecycleConfiguration={'Rules': [{'x': 'y'}]})
+    s3.meta.client.put_bucket_encryption.assert_called_once_with(
+        Bucket='bucket-1',
+        ServerSideEncryptionConfiguration={'Rules': [{'a': 'b'}]})
+    bucket.Tagging().put.assert_called_once_with(
+        Tagging={'TagSet': [
+            {'Key': 'foo', 'Value': 'bar'},
+            {'Key': 'bee', 'Value': 'baz'}
+            ]})
 
 
 if __name__ == '__main__':
