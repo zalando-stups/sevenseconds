@@ -21,7 +21,7 @@ def configure_s3_buckets(account: object):
                     bucket.Policy().put(Policy=policy_json)
 
             logging_target = config.get('logging_target', None)
-            lifecycle_config = config.get('logging_lifecycle_configuration')
+            logging_lifecycle_config = config.get('logging_lifecycle_configuration')
             if logging_target is not None:
                 logging_enabled = bucket.Logging().logging_enabled
                 logging_target = logging_target.format(account_id=account.id, region=region)
@@ -32,7 +32,7 @@ def configure_s3_buckets(account: object):
                 else:
                     logging_bucket = create_logging_target(s3, logging_target, region)
                     enable_logging(bucket, logging_bucket)
-                configure_bucket_lifecycle(s3, lifecycle_config, logging_target)
+                configure_bucket_lifecycle(s3, logging_lifecycle_config, logging_target)
 
 
 def create_logging_target(s3: object, logging_target: str, region: str):
