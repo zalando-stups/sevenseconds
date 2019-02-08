@@ -20,6 +20,10 @@ def configure_s3_buckets(account: object):
                     policy_json = json.dumps(policy).replace('{bucket_name}', bucket_name)
                     bucket.Policy().put(Policy=policy_json)
 
+            main_lifecycle_config = config.get('lifecycle_configuration')
+            if main_lifecycle_config is not None:
+                configure_bucket_lifecycle(s3, main_lifecycle_config, bucket_name)
+
             logging_target = config.get('logging_target', None)
             logging_lifecycle_config = config.get('logging_lifecycle_configuration')
             if logging_target is not None:
