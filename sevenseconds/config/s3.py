@@ -24,6 +24,12 @@ def configure_s3_buckets(account: object):
             if main_lifecycle_config is not None:
                 configure_bucket_lifecycle(s3, main_lifecycle_config, bucket_name)
 
+            encryption_config = config.get('encryption_config')
+            if encryption_config is not None:
+                s3.meta.client.put_bucket_encryption(
+                    Bucket=bucket_name,
+                    ServerSideEncryptionConfiguration=encryption_config)
+
             logging_target = config.get('logging_target', None)
             logging_lifecycle_config = config.get('logging_lifecycle_configuration')
             if logging_target is not None:
