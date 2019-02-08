@@ -30,6 +30,13 @@ def configure_s3_buckets(account: object):
                     Bucket=bucket_name,
                     ServerSideEncryptionConfiguration=encryption_config)
 
+            tags = config.get('tags')
+            if tags is not None:
+                tag_set = []
+                for k, v in tags.items():
+                    tag_set.append({'Key': k, 'Value': v})
+                bucket.Tagging().put(Tagging={'TagSet': tag_set})
+
             logging_target = config.get('logging_target', None)
             logging_lifecycle_config = config.get('logging_lifecycle_configuration')
             if logging_target is not None:
