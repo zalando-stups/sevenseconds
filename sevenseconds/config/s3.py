@@ -20,8 +20,25 @@ def configure_s3_buckets(account: object):
                     policy_json = json.dumps(policy).replace('{bucket_name}', bucket_name)
                     bucket.Policy().put(Policy=policy_json)
 
+            main_lifecycle_config = config.get('lifecycle_configuration')
+            if main_lifecycle_config is not None:
+                configure_bucket_lifecycle(s3, main_lifecycle_config, bucket_name)
+
+            encryption_config = config.get('encryption_config')
+            if encryption_config is not None:
+                s3.meta.client.put_bucket_encryption(
+                    Bucket=bucket_name,
+                    ServerSideEncryptionConfiguration=encryption_config)
+
+            tags = config.get('tags')
+            if tags is not None:
+                tag_set = []
+                for k, v in tags.items():
+                    tag_set.append({'Key': k, 'Value': v})
+                bucket.Tagging().put(Tagging={'TagSet': tag_set})
+
             logging_target = config.get('logging_target', None)
-            lifecycle_config = config.get('logging_lifecycle_configuration')
+            logging_lifecycle_config = config.get('logging_lifecycle_configuration')
             if logging_target is not None:
                 logging_enabled = bucket.Logging().logging_enabled
                 logging_target = logging_target.format(account_id=account.id, region=region)
@@ -32,7 +49,7 @@ def configure_s3_buckets(account: object):
                 else:
                     logging_bucket = create_logging_target(s3, logging_target, region)
                     enable_logging(bucket, logging_bucket)
-                configure_log_lifecycle(s3, lifecycle_config, logging_target)
+                configure_bucket_lifecycle(s3, logging_lifecycle_config, logging_target)
 
 
 def create_logging_target(s3: object, logging_target: str, region: str):
@@ -58,10 +75,10 @@ def enable_logging(bucket: object, logging_bucket: object):
         )
 
 
-def configure_log_lifecycle(s3: object, lifecycle_config: dict, logging_target: str):
-    with ActionOnExit('Check lifecycle for logging target {}'.format(logging_target)) as act:
+def configure_bucket_lifecycle(s3: object, lifecycle_config: dict, bucket: str):
+    with ActionOnExit('Check lifecycle for bucket {}'.format(bucket)) as act:
         if lifecycle_config:
-            logging_lifecycle = s3.BucketLifecycle(logging_target)
+            logging_lifecycle = s3.BucketLifecycle(bucket)
             logging_lifecycle.put(LifecycleConfiguration=lifecycle_config)
         else:
             act.warning('skip')
