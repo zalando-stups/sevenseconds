@@ -28,8 +28,10 @@ def drop_old_cloudtrails(account):
         regions.remove(home_region)
 
     futures = []
-    with ThreadPoolExecutor(max_workers=len(regions)) as executor:
-        for region in regions:
+    cloudtrail_regions = account.config.get('cloudtrail', {}).get('regions', [])
+    enabled_regions = list(set(regions).intersection(set(cloudtrail_regions)))
+    with ThreadPoolExecutor(max_workers=len(enabled_regions)) as executor:
+        for region in enabled_regions:
             futures.append(executor.submit(drop_old_cloudtrails_worker, account, region, account.dry_run))
     for future in futures:
         # will raise an exception if the jobs failed
