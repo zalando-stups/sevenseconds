@@ -14,6 +14,7 @@ from .helper.regioninfo import get_regions
 from .config import start_configuration, start_cleanup
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
+SUPPORTED_CONFIG_VERSION = 1
 
 
 def print_version(ctx, param, value):
@@ -153,6 +154,16 @@ def cli_update_security_group(file, region, account_name_pattern, security_group
     fatal_error('not implemented yet')
 
 
+def load_config(file):
+    result = yaml.safe_load(file)
+    config_version = result.get('version')
+    if config_version != SUPPORTED_CONFIG_VERSION:
+        error = "Only configuration version {} is supported (found {}), please update sevenseconds".format(
+            SUPPORTED_CONFIG_VERSION, config_version)
+        raise Exception(error)
+    return result
+
+
 @cli.command('verify-trusted-networks')
 @click.argument('file', type=click.File('rb'))
 @click.argument('cidr-list', nargs=-1)
@@ -160,7 +171,7 @@ def verify_trusted_networks(file, cidr_list):
     '''Check if the given CIDR included in the trusted networks list
 
     CIDR        One or more CIDR Network Blocks'''
-    config = yaml.safe_load(file)
+    config = load_config(file)
     addresses = set()
     for name, net in config.get('global', {}).get('trusted_networks', {}).items():
         addresses.add(IPNetwork(net))
@@ -184,7 +195,7 @@ def verify_trusted_networks(file, cidr_list):
 
 
 def _get_session(msg, file, account_name_pattern, options):
-    config = yaml.safe_load(file)
+    config = load_config(file)
     accounts = config.get('accounts', {})
     account_names = []
     if len(account_name_pattern) == 0:

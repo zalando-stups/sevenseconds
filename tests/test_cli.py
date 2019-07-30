@@ -1,7 +1,7 @@
 import pytest
 from click.testing import CliRunner
 from unittest.mock import MagicMock
-from sevenseconds.cli import cli, yaml
+from sevenseconds.cli import SUPPORTED_CONFIG_VERSION, cli, yaml
 
 
 def test_print_version():
@@ -17,7 +17,10 @@ def test_print_version():
 
 def test_configure_nonexisting_account(monkeypatch):
     runner = CliRunner()
-    config = {'accounts': {}}
+    config = {
+        'version': SUPPORTED_CONFIG_VERSION,
+        'accounts': {}
+    }
 
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
@@ -29,7 +32,10 @@ def test_configure_nonexisting_account(monkeypatch):
 
 def test_configure_nonexisting_multi_account(monkeypatch):
     runner = CliRunner()
-    config = {'accounts': {}}
+    config = {
+        'version': SUPPORTED_CONFIG_VERSION,
+        'accounts': {}
+    }
 
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
@@ -65,6 +71,7 @@ def test_configure_missing_config_option(monkeypatch):
     runner = CliRunner()
 
     config = {
+        'version': SUPPORTED_CONFIG_VERSION,
         'global': {
             'base_ami': {
                 'name': 'MyBaseAmi*',
