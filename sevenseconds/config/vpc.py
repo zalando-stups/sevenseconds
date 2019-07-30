@@ -23,7 +23,7 @@ def configure_vpc(account, region, base_ami_id):
 
     vpc_config = account.config.get('vpc_net', {}).get(region)
     if vpc_config is not None:
-        vpc_net = IPNetwork(account.config['vpc_net'][region]['network'])
+        vpc_net = IPNetwork(account.config['vpc_net'][region]['cidr'])
         info('Region with non default VPC-Network: {}'.format(vpc_net))
         with ActionOnExit('Finding existing default VPC..'):
             vpc = find_vpc(ec2, VPC_NET)
