@@ -2,6 +2,7 @@ import time
 import json
 import re
 import hashlib
+from collections import namedtuple
 from netaddr import IPNetwork
 from ..helper import ActionOnExit, info, warning, error
 from ..helper.network import calculate_subnet
@@ -11,14 +12,18 @@ from clickclick import OutputFormat
 from clickclick.console import print_table
 
 VPC_NET = IPNetwork('172.31.0.0/16')
+Subnet = namedtuple('Subnet', ['availability_zone', 'subnet_type', 'cidr', 'tags'])
 
 
 def configure_vpc(account, region, base_ami_id):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
+
     vpc_net = VPC_NET
-    if 'vpc_net' in account.config and region in account.config['vpc_net']:
-        vpc_net = IPNetwork(account.config['vpc_net'][region]['network'])
+
+    vpc_config = account.config.get('vpc_net', {}).get(region)
+    if vpc_config:
+        vpc_net = IPNetwork(account.config['vpc_net'][region]['cidr'])
         info('Region with non default VPC-Network: {}'.format(vpc_net))
         with ActionOnExit('Finding existing default VPC..'):
             vpc = find_vpc(ec2, VPC_NET)
@@ -76,10 +81,15 @@ def configure_vpc(account, region, base_ami_id):
             with ActionOnExit('Deleting subnet {subnet_id}..', subnet_id=subnet.id):
                 if not account.dry_run:
                     subnet.delete()
-    for _type in 'dmz', 'internal':
-        for i, az in enumerate(sorted(availability_zones)):
-            net = calculate_subnet(vpc_net, _type, i)
-            configure_subnet(vpc, az, _type, net, account.dry_run, ec2c.get_waiter('subnet_available'))
+
+    # Configure subnets
+    if vpc_config and 'subnets' in vpc_config:
+        subnets = custom_subnets(vpc_net, vpc_config['subnets'], availability_zones)
+    else:
+        subnets = default_subnets(vpc_net, availability_zones)
+
+    for subnet in subnets:
+        configure_subnet(vpc, subnet, account.dry_run, ec2c.get_waiter('subnet_available'))
 
     nat_instances = create_nat_instances(account, vpc, region)
     create_routing_tables(vpc, nat_instances,
@@ -88,6 +98,25 @@ def configure_vpc(account, region, base_ami_id):
     create_vpc_endpoints(account, vpc, region)
     check_vpn_propagation(account, vpc, region)
     return vpc
+
+
+def custom_subnets(vpc_net, subnet_config, availability_zones):
+    for az in sorted(availability_zones):
+        for subnet in subnet_config[az]:
+            cidr = IPNetwork(subnet['cidr'])
+            if cidr not in vpc_net:
+                raise Exception("Subnet {} doesn't belong to VPC {}".format(subnet, vpc_net))
+            yield Subnet(az, subnet['type'], cidr, subnet.get('tags', {}))
+
+
+def default_subnets(vpc_net, availability_zones):
+    for subnet_type in 'dmz', 'internal':
+        for i, az in enumerate(sorted(availability_zones)):
+            tags = {}
+            if subnet_type == 'dmz':
+                tags['kubernetes.io/role/elb'] = ''
+                tags['kubernetes.io/role/internal-elb'] = ''
+            yield Subnet(az, subnet_type, calculate_subnet(vpc_net, subnet_type, i), tags)
 
 
 def exist_flowlog(session, region, vpc_id):
@@ -215,27 +244,23 @@ def delete_rds_subnet_group(session: object, region: str):
             info(e)
 
 
-def configure_subnet(vpc, az, _type: str, cidr: IPNetwork, dry_run: bool, waiter):
-    name = '{}-{}'.format(_type, az)
-    tags = []
-    subnet = find_subnet(vpc, cidr)
-    if not subnet:
-        with ActionOnExit('Creating subnet {name} with {cidr}..', **vars()):
+def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
+    name = '{}-{}'.format(subnet.subnet_type, subnet.availability_zone)
+    tags = dict(subnet.tags)
+    tags['Name'] = name
+    existing_subnet = find_subnet(vpc, subnet.cidr)
+    if not existing_subnet:
+        with ActionOnExit('Creating subnet {name} with {cidr}..', name=name, cidr=subnet.cidr):
             if not dry_run:
-                subnet = vpc.create_subnet(CidrBlock=str(cidr), AvailabilityZone=az)
-                waiter.wait(SubnetIds=[subnet.id], Filters=[
+                existing_subnet = vpc.create_subnet(CidrBlock=str(subnet.cidr),
+                                                    AvailabilityZone=subnet.availability_zone)
+                waiter.wait(SubnetIds=[existing_subnet.id], Filters=[
                     {'Name': 'cidrBlock',
-                     'Values': [str(cidr)]},
+                     'Values': [str(subnet.cidr)]},
                     {'Name': 'availabilityZone',
-                     'Values': [az]}
+                     'Values': [subnet.availability_zone]}
                 ])
-                # We are to fast for AWS (InvalidSubnetID.NotFound)
-                tags.append({'Key': 'Name', 'Value': name})
-    if _type == 'dmz':
-        tags.append({'Key': 'kubernetes.io/role/elb', 'Value': ''})
-        tags.append({'Key': 'kubernetes.io/role/internal-elb', 'Value': ''})
-    if tags:
-        subnet.create_tags(Tags=tags)
+    existing_subnet.create_tags(Tags=[{'Key': k, 'Value': v} for k, v in tags.items()])
 
 
 def find_subnet(vpc: object, cidr):
