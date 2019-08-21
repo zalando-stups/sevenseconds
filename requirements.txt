@@ -1,5 +1,5 @@
 clickclick>=1.2.1
-boto3>=1.4.4
+boto3>=1.9.212
 botocore>=1.5.26
 netaddr>=0.7.18
 requests>=2.9.1

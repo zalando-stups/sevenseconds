@@ -13,6 +13,7 @@ from .cloudtrail import configure_cloudtrail_all_regions
 from .route53 import configure_dns
 from .acm import configure_acm
 from .ami import latest_base_images, configure_base_images
+from .ec2 import configure_ebs_encryption
 from .iam import configure_iam
 from .s3 import configure_s3_buckets
 from .kms import configure_kms_keys
@@ -140,6 +141,7 @@ def configure_account_region(account: object, region: str, shared_data: SharedDa
     configure_log_group(account.session, region)
     configure_acm(account, region)
     configure_kms_keys(account, region)
+    configure_ebs_encryption(account, region)
     configure_base_images(account, region, base_images)
     vpc = configure_vpc(account, region, default_base_ami)
     configure_bastion_host(account, vpc, region, default_base_ami)
