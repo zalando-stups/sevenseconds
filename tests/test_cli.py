@@ -30,21 +30,6 @@ def test_configure_nonexisting_account(monkeypatch):
     assert 'No configuration found for account myaccount' in result.output
 
 
-def test_configure_nonexisting_multi_account(monkeypatch):
-    runner = CliRunner()
-    config = {
-        'version': SUPPORTED_CONFIG_VERSION,
-        'accounts': {}
-    }
-
-    with runner.isolated_filesystem():
-        with open('config.yaml', 'w') as fd:
-            yaml.safe_dump(config, fd)
-        result = runner.invoke(cli, ['configure', 'config.yaml', 'myaccount', 'dummyaccount'], catch_exceptions=False)
-
-    assert 'No configuration found for account myaccount, dummyaccount' in result.output
-
-
 def test_configure_missing_config_option(monkeypatch):
 
     myboto3 = MagicMock(list_account_aliases=lambda *args, **vargs: {'AccountAliases': ['myaccount']},
@@ -92,7 +77,7 @@ def test_configure_missing_config_option(monkeypatch):
     with runner.isolated_filesystem():
         with open('config.yaml', 'w') as fd:
             yaml.safe_dump(config, fd)
-        result = runner.invoke(cli, ['configure', 'config.yaml', 'my*'], catch_exceptions=False)
+        result = runner.invoke(cli, ['configure', 'config.yaml', 'my.*'], catch_exceptions=False)
 
     assert 'Start configuration of: myaccount, mystaging' in result.output
     assert 'Missing Option "admin_account" please set Account Name for Main-Account!' in result.output
