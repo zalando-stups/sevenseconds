@@ -1,4 +1,4 @@
-import fnmatch
+import re
 import click
 import yaml
 import os
@@ -39,7 +39,7 @@ def destroy(account_name, region):
 
 @cli.command()
 @click.argument('file', type=click.File('rb'))
-@click.argument('account_name_pattern', nargs=-1)
+@click.argument('account_name_pattern')
 @click.option('--dry-run', is_flag=True)
 @click.option('-P', '--max-procs',
               help='Run  up  to  max-procs processes at a time. Default CPU Count',
@@ -65,17 +65,11 @@ def destroy(account_name, region):
 def configure(file, account_name_pattern, **options):
     '''Configure one or more AWS account(s) matching the provided pattern
 
-       ACCOUNT_NAME_PATTERN are Unix shell style:
+       ACCOUNT_NAME_PATTERN is a regex that is matched against the full account name
 
-       \b
-         *       matches everything
-         ?       matches any single character
-         [seq]   matches any character in seq
-         [!seq]  matches any char not in seq
-
-        Posible Enviroment Variables
-        AWS_PROFILE     Connect to this Profile without SAML
-        SSLDIR          Directory with all SSL-Files
+       Posible Enviroment Variables
+       AWS_PROFILE     Connect to this Profile without SAML
+       SSLDIR          Directory with all SSL-Files
     '''
     try:
         config, sessions = _get_session(
@@ -197,19 +191,11 @@ def verify_trusted_networks(file, cidr_list):
 def _get_session(msg, file, account_name_pattern, options):
     config = load_config(file)
     accounts = config.get('accounts', {})
-    account_names = []
-    if len(account_name_pattern) == 0:
-        if os.environ.get('AWS_PROFILE'):
-            account_name_pattern = {os.environ.get('AWS_PROFILE')}
-        else:
-            error('No AWS accounts given!')
-            raise
 
-    for pattern in account_name_pattern:
-        account_names.extend(sorted(fnmatch.filter(accounts.keys(), pattern)))
+    account_names = [account for account in accounts.keys() if re.fullmatch(account_name_pattern, account)]
 
     if not account_names:
-        error('No configuration found for account {}'.format(', '.join(account_name_pattern)))
+        error('No configuration found for account {}'.format(account_name_pattern))
         raise
 
     account_name_length = max([len(x) for x in account_names])
