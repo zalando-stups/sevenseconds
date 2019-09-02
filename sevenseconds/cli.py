@@ -91,7 +91,7 @@ def configure(file, account_name_pattern, **options):
 @cli.command('clear-region')
 @click.argument('file', type=click.File('rb'))
 @click.argument('region')
-@click.argument('account_name_pattern', nargs=-1)
+@click.argument('account_name_pattern')
 @click.option('--dry-run', is_flag=True)
 @click.option('-P', '--max-procs',
               help='Run  up  to  max-procs processes at a time. Default CPU Count',
