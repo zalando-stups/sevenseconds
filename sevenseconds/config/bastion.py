@@ -11,9 +11,10 @@ from copy import deepcopy
 from ..helper import info, warning, error, ActionOnExit, substitute_template_vars
 from ..helper.aws import filter_subnets, associate_address, get_tag
 from .route53 import configure_dns_record, delete_dns_record
+from ..config import AccountData
 
 
-def configure_bastion_host(account: object, vpc: object, region: str, base_ami_id: str):
+def configure_bastion_host(account: AccountData, vpc: object, region: str, base_ami_id: str):
     ec2 = account.session.resource('ec2', region)
     cf = account.session.resource('cloudformation', region)
     cfc = account.session.client('cloudformation', region)
@@ -144,7 +145,7 @@ def configure_bastion_host(account: object, vpc: object, region: str, base_ami_i
             update_cf_bastion_host(account, vpc, region, stack, base_ami_id, bastion_version)
 
 
-def cleanup_old_security_group(account: object, region: str, oddstack: object, vpc: object):
+def cleanup_old_security_group(account: AccountData, region: str, oddstack: object, vpc: object):
     ec2 = account.session.resource('ec2', region)
     stack_security_group_id = oddstack.Resource(logical_id='OddSecurityGroup').physical_resource_id
     sgs = [x for x in vpc.security_groups.all() if x.group_name == 'Odd (SSH Bastion Host)']
@@ -204,7 +205,7 @@ def _change_permission(sg, permission, old_group_id, new_group_id, direction, ac
             act.error('Can\'t authorize the Permissions: {}'.format(e))
 
 
-def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: str, bastion_version: str):
+def create_cf_bastion_host(account: AccountData, vpc: object, region: str, ami_id: str, bastion_version: str):
     cf = account.session.resource('cloudformation', region)
     cfc = account.session.client('cloudformation', region)
     ec2c = account.session.client('ec2', region)
@@ -267,10 +268,14 @@ def create_cf_bastion_host(account: object, vpc: object, region: str, ami_id: st
             return
 
     info('SSH Bastion instance is running with public IP {}'.format(ip))
-    configure_dns_record(account, 'odd-{}'.format(region), ip)
+    if account.domain is not None:
+        configure_dns_record(account, 'odd-{}'.format(region), ip)
+    else:
+        warning('No DNS domain configured, skipping record creation')
 
 
-def update_cf_bastion_host(account: object, vpc: object, region: str, stack: object, ami_id: str, bastion_version: str):
+def update_cf_bastion_host(account: AccountData, vpc: object, region: str, stack: object, ami_id: str,
+                           bastion_version: str):
     cloudformation = account.session.client('cloudformation', region)
 
     # switch subnet, every update => force reinitialisation
@@ -360,7 +365,7 @@ def wait_for_ssh_port(host: str, timeout: int):
             act.progress()
 
 
-def delete_bastion_host(account: object, region: str):
+def delete_bastion_host(account: AccountData, region: str):
     ec2 = account.session.resource('ec2', region)
     cf = account.session.resource('cloudformation', region)
     cfc = account.session.client('cloudformation', region)
@@ -368,7 +373,7 @@ def delete_bastion_host(account: object, region: str):
     for instance in ec2.instances.all():
         if get_tag(instance.tags, 'Name') == 'Odd (SSH Bastion Host)':
             if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
-                if instance.public_ip_address:
+                if account.domain is not None and instance.public_ip_address:
                     try:
                         delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
                     except Exception:
@@ -382,7 +387,7 @@ def delete_bastion_host(account: object, region: str):
          'Values': ['running', 'pending', 'stopping', 'stopped']},
     ]
     for instance in ec2.instances.filter(Filters=cloudformation_filter):
-        if instance.public_ip_address:
+        if account.domain is not None and instance.public_ip_address:
             try:
                 delete_dns_record(account, 'odd-{}'.format(region), instance.public_ip_address)
             except Exception as e:

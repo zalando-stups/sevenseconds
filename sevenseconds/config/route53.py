@@ -1,10 +1,16 @@
 from ..helper import ActionOnExit, error, info, warning
 from ..helper.aws import get_account_id
+from ..config import AccountData
 
 
-def configure_dns(account: object):
+def configure_dns(account: AccountData):
     conn = account.session.client('route53')
-    dns_domain = account.config.get('domain').format(account_name=account.name)
+    dns_domain = account.domain
+
+    if not dns_domain:
+        info('No domain configured for account, skipping DNS setup')
+        return
+
     zone = list(filter(lambda x: x['Name'] == dns_domain + '.',
                        conn.list_hosted_zones_by_name(DNSName=dns_domain + '.')['HostedZones']))
     if not zone:
@@ -32,12 +38,11 @@ def configure_dns(account: object):
                                     'ResourceRecordSet': {'Name': zone['Name'],
                                                           'Type': 'SOA',
                                                           'TTL': int(soa_ttl),
-                                                          'ResourceRecords':rr}}]}
+                                                          'ResourceRecords': rr}}]}
         conn.change_resource_record_sets(HostedZoneId=zone['Id'], ChangeBatch=changebatch)
 
     if (account.id == get_account_id(account.admin_session)):
         cleanup_delegation(account)
-    return dns_domain
 
 
 def configure_dns_delegation(admin_session: object, domain: str, nameservers: list, action: str = 'UPSERT'):
@@ -66,7 +71,7 @@ def configure_dns_delegation(admin_session: object, domain: str, nameservers: li
         else:
             error('Request for {} failed: {}'.format(domain, response))
     else:
-        error('Can\'t find any Zone for {}'. format(domain))
+        error('Can\'t find any Zone for {}'.format(domain))
 
 
 def get_dns_record(account, dnsname, record_type='A'):
@@ -86,13 +91,15 @@ def get_dns_record(account, dnsname, record_type='A'):
         return
 
 
-def configure_dns_record(account, hostname, value, type='A', action='UPSERT'):
+def configure_dns_record(account: AccountData, hostname, value, type='A', action='UPSERT'):
     if isinstance(value, list):
         values = value
     else:
         values = [value]
     route53 = account.session.client('route53')
-    dns_domain = account.config.get('domain').format(account_name=account.name)
+    dns_domain = account.domain
+    if dns_domain is None:
+        raise ValueError("No DNS domain configured for account")
     domain = '.'.join([hostname, dns_domain])
     with ActionOnExit('{} DNS record {}: {}'
                       .format('Adding' if action == 'UPSERT' else 'Deleting', domain, values)) as act:
@@ -120,7 +127,7 @@ def configure_dns_record(account, hostname, value, type='A', action='UPSERT'):
             else:
                 act.error('Request for {} failed: {}'.format(domain, response))
         else:
-            act.error('Can\'t find any Zone for {}'. format(domain))
+            act.error('Can\'t find any Zone for {}'.format(domain))
 
 
 def delete_dns_record(account, hostname, value, type='A', action='UPSERT'):
@@ -146,7 +153,7 @@ def find_zoneid(domain: str, route53: object):
     return None
 
 
-def cleanup_delegation(account: object):
+def cleanup_delegation(account: AccountData):
     route53 = account.admin_session.client('route53')
     account_list = account.auth.get_aws_accounts()
     tld = account.config.get('domain').format(account_name='').strip('.')

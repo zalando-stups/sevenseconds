@@ -7,7 +7,6 @@ import botocore.exceptions
 import multiprocessing
 from itertools import repeat
 from ..helper import ActionOnExit, error, fatal_error
-from ..config import AccountData
 
 
 class AssumeRoleFailed(Exception):
@@ -262,6 +261,8 @@ def get_sessions(account_names: list,
 
 
 def rewrite_sessions_map(sessions_tmp: dict, credentials: dict, options: dict):
+    from ..config import AccountData
+
     sessions = {}
     for account_name in sessions_tmp:
         account_keyname = sessions_tmp[account_name]['account_keyname']

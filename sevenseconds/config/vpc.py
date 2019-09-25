@@ -10,12 +10,13 @@ from ..helper.aws import filter_subnets, get_tag, get_az_names, associate_addres
 from .route53 import configure_dns_record, delete_dns_record
 from clickclick import OutputFormat
 from clickclick.console import print_table
+from ..config import AccountData
 
 VPC_NET = IPNetwork('172.31.0.0/16')
 Subnet = namedtuple('Subnet', ['availability_zone', 'subnet_type', 'cidr', 'tags'])
 
 
-def configure_vpc(account, region, base_ami_id):
+def configure_vpc(account: AccountData, region, base_ami_id):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
 
@@ -269,7 +270,7 @@ def find_subnet(vpc: object, cidr):
             return subnet
 
 
-def create_nat_instances(account: object, vpc: object, region: str):
+def create_nat_instances(account: AccountData, vpc: object, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
     logs = account.session.client('logs', region)
@@ -461,7 +462,11 @@ def create_nat_instances(account: object, vpc: object, region: str):
                                                                    ip,
                                                                    nat_instance_by_az[az_name]))
 
-        configure_dns_record(account, 'nat-{}'.format(az_name), ip)
+        if account.domain is not None:
+            configure_dns_record(account, 'nat-{}'.format(az_name), ip)
+        else:
+            warning('No DNS domain configured, skipping record creation')
+
     filters = [
         {'Name': 'state', 'Values': ['pending']}
     ]
@@ -551,7 +556,7 @@ def configure_routing_table(vpc: object, nat_instance_by_az: dict, replace_defau
             ])
 
 
-def create_vpc_endpoints(account: object, vpc: object, region: str):
+def create_vpc_endpoints(account: AccountData, vpc: object, region: str):
     ec2c = account.session.client('ec2', region)
     router_tables = set([rt.id for rt in vpc.route_tables.all()])
     service_names = ec2c.describe_vpc_endpoint_services()['ServiceNames']
@@ -614,7 +619,7 @@ def create_vpc_endpoints(account: object, vpc: object, region: str):
             info('found new possible service endpoint: {}'.format(service_name))
 
 
-def check_vpn_propagation(account: object, vpc: object, region: str):
+def check_vpn_propagation(account: AccountData, vpc: object, region: str):
     ec2c = account.session.client('ec2', region)
     for vpn_gateway in ec2c.describe_vpn_gateways(Filters=[
         {
@@ -643,7 +648,7 @@ def is_vgw_propagation_active(propagating_vgws: list, vgw_id: str):
     return False
 
 
-def if_vpc_empty(account: object, region: str):
+def if_vpc_empty(account: AccountData, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
 
@@ -711,12 +716,12 @@ def if_vpc_empty(account: object, region: str):
     return account_is_free
 
 
-def delete_nat_host(account: object, region: str):
+def delete_nat_host(account: AccountData, region: str):
     ec2 = account.session.resource('ec2', region)
     availability_zones = get_az_names(account.session, region)
     for instance in ec2.instances.all():
         if instance.state.get('Name') in ('running', 'pending', 'stopping', 'stopped'):
-            if instance.public_ip_address:
+            if account.domain is not None and instance.public_ip_address:
                 delete_dns_record(account,
                                   'nat-{}'.format(instance.subnet.availability_zone),
                                   instance.public_ip_address)
@@ -726,14 +731,14 @@ def delete_nat_host(account: object, region: str):
                 terminitate_nat_instance(instance, instance.subnet.availability_zone)
 
 
-def cleanup_vpc(account: object, region: str):
+def cleanup_vpc(account: AccountData, region: str):
     ec2 = account.session.resource('ec2', region)
     ec2c = account.session.client('ec2', region)
 
     with ActionOnExit('Delete Nat Gateways..'):
         for gateway in ec2c.describe_nat_gateways()['NatGateways']:
             if gateway['State'] == 'available':
-                if gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'):
+                if account.domain is not None and gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'):
                     delete_dns_record(account,
                                       'nat-{}'.format(ec2.Subnet(gateway['SubnetId']).availability_zone),
                                       gateway.get('NatGatewayAddresses', {})[0].get('PublicIp'))
