@@ -11,10 +11,10 @@ from .helper import error, info, fatal_error
 from .helper.auth import get_sessions
 from .helper.network import get_trusted_addresses
 from .helper.regioninfo import get_regions
-from .config import start_configuration, start_cleanup
+from .config.configure import start_configuration, start_cleanup
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-SUPPORTED_CONFIG_VERSION = 1
+SUPPORTED_CONFIG_VERSION = 2
 
 
 def print_version(ctx, param, value):

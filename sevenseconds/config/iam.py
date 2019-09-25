@@ -2,16 +2,22 @@ import os
 import gnupg
 import json
 import requests
-from ..helper import fatal_error, info, ActionOnExit, error
+from ..helper import fatal_error, info, ActionOnExit, error, warning
+from ..config import AccountData
 
 
-def configure_iam(account: object, dns_domain: str):
+def configure_iam(account: AccountData):
     configure_iam_policy(account)
     configure_iam_saml(account)
-    configure_iam_certificate(account.session, dns_domain)
+
+    dns_domain = account.domain
+    if dns_domain:
+        configure_iam_certificate(account.session, dns_domain)
+    else:
+        warning('No DNS domain configured, skipping certificate management')
 
 
-def configure_iam_policy(account: object):
+def configure_iam_policy(account: AccountData):
     iam = account.session.resource('iam')
     sts = account.session.client('sts')
     roles = account.config.get('roles', {})
@@ -89,7 +95,7 @@ def configure_iam_policy(account: object):
                     policy.detach_role(RoleName=role_name)
 
 
-def configure_iam_saml(account: object):
+def configure_iam_saml(account: AccountData):
     iam = account.session.resource('iam')
     for name, url in account.config.get('saml_providers', {}).items():
         arn = 'arn:aws:iam::{account_id}:saml-provider/{name}'.format(account_id=account.id, name=name)

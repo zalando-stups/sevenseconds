@@ -95,9 +95,11 @@ def get_trusted_addresses(session_data, config: dict):
         if _cfg:
             cfg.update(_cfg)
         for region in cfg['regions']:
-            domains.update(['odd-{}.{}'.format(region, cfg.get('domain').format(account_name=account_name))])
-            for az in get_az_names(session, region):
-                domains.add('nat-{}.{}'.format(az, cfg.get('domain').format(account_name=account_name)))
+            dns_domain = cfg.get('domain')
+            if dns_domain:
+                domains.update(['odd-{}.{}'.format(region, dns_domain.format(account_name=account_name))])
+                for az in get_az_names(session, region):
+                    domains.add('nat-{}.{}'.format(az, dns_domain.format(account_name=account_name)))
 
     with multiprocessing.Pool(processes=os.cpu_count() * 20) as pool:
         addresses.update(pool.map(get_address, sorted(domains)))
