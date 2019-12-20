@@ -1,5 +1,4 @@
 from ..helper import ActionOnExit, error, info, warning
-from ..helper.aws import get_account_id
 from ..config import AccountData
 
 
@@ -40,9 +39,6 @@ def configure_dns(account: AccountData):
                                                           'TTL': int(soa_ttl),
                                                           'ResourceRecords': rr}}]}
         conn.change_resource_record_sets(HostedZoneId=zone['Id'], ChangeBatch=changebatch)
-
-    if (account.id == get_account_id(account.admin_session)):
-        cleanup_delegation(account)
 
 
 def configure_dns_delegation(admin_session: object, domain: str, nameservers: list, action: str = 'UPSERT'):
