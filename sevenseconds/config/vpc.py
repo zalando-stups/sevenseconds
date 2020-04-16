@@ -92,10 +92,17 @@ def configure_vpc(account: AccountData, region, base_ami_id):
     for subnet in subnets:
         configure_subnet(vpc, subnet, account.dry_run, ec2c.get_waiter('subnet_available'))
 
-    nat_instances = create_nat_instances(account, vpc, region)
-    create_routing_tables(vpc, nat_instances,
-                          account.options.get('re_add_defaultroute', False),
-                          account.config.get('enable_dedicated_dmz_route', False))
+    enable_nat = account.config.get("enable_nat", True)
+    if enable_nat:
+        nat_instances = create_nat_instances(account, vpc, region)
+    else:
+        nat_instances = {}
+
+    create_routing_tables(
+        vpc, nat_instances,
+        account.options.get('re_add_defaultroute', False),
+        account.config.get('enable_dedicated_dmz_route', False)
+    )
     create_vpc_endpoints(account, vpc, region)
     check_vpn_propagation(account, vpc, region)
     return vpc
@@ -631,10 +638,10 @@ def check_vpn_propagation(account: AccountData, vpc: object, region: str):
     ]).get('VpnGateways', []):
         for route_table in vpc.route_tables.all():
             msg = '{} | {} Route Propagation {} | {}: '.format(
-                    route_table.id,
-                    get_tag(route_table.tags, 'Name'),
-                    vpn_gateway['VpnGatewayId'],
-                    get_tag(vpn_gateway.get('Tags', {}), 'Name'))
+                route_table.id,
+                get_tag(route_table.tags, 'Name'),
+                vpn_gateway['VpnGatewayId'],
+                get_tag(vpn_gateway.get('Tags', {}), 'Name'))
             if is_vgw_propagation_active(route_table.propagating_vgws, vpn_gateway['VpnGatewayId']):
                 info('{} {}'.format(msg, 'Yes'))
             else:
@@ -707,11 +714,11 @@ def if_vpc_empty(account: AccountData, region: str):
                     '''.split(),
                     rows,
                     styles={
-                                'running': {'fg': 'green'},
-                                'stopped': {'fg': 'red', 'bold': True},
-                                '✔': {'bg': 'green'},
-                                '✘': {'bg': 'red', 'bold': True},
-                            })
+                        'running': {'fg': 'green'},
+                        'stopped': {'fg': 'red', 'bold': True},
+                        '✔': {'bg': 'green'},
+                        '✘': {'bg': 'red', 'bold': True},
+                    })
 
     return account_is_free
 
