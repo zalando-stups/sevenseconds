@@ -31,6 +31,8 @@ def configure_acm(account: object, region):
                     cert = acm.describe_certificate(CertificateArn=cert_summary['CertificateArn'])['Certificate']
                     if cert['Status'] == 'PENDING_VALIDATION':
                         resend_validation_email(acm, cert)
+                    elif 'RenewalSummary' in cert and cert['RenewalSummary']['RenewalStatus'] == 'PENDING_VALIDATION':
+                        resend_validation_email(acm, cert)
                     elif cert['Status'] != 'ISSUED':
                         continue
                     elif (datetime.timedelta(weeks=4)
