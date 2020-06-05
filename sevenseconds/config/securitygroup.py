@@ -13,8 +13,8 @@ def configure_security_groups(account: object, region: str, trusted_addresses: s
             update_security_group(account.session, region, sg_name, trusted_addresses)
 
 
-def chunks(list, n):
-    """ Yield successive n-sized chunks from list.
+def chunks(collection, n):
+    """ Yield successive n-sized chunks from collection.
     >>> a = chunks('a b c d e f g h i j k l m'.split(), 2)
     >>> a.__next__()
     ['a', 'b']
@@ -46,8 +46,8 @@ def chunks(list, n):
         ...
     StopIteration
     """
-    for i in range(0, len(list), n):
-        yield list[i:i + n]
+    for i in range(0, len(collection), n):
+        yield collection[i:i + n]
 
 
 def consolidate_networks(networks: set, min_prefixlen: int):
