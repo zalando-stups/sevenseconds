@@ -33,7 +33,7 @@ def configure_acm(account: object, region):
                         resend_validation_email(acm, cert)
                     elif cert['Status'] != 'ISSUED':
                         continue
-                    elif (datetime.timedelta(weeks=4)
+                    elif (datetime.timedelta(weeks=8)
                             > cert['NotAfter'] - datetime.datetime.now(cert['NotAfter'].tzinfo)):
                         renew_certificate(acm, cert)
                     domain_options = {}
