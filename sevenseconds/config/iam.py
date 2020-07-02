@@ -1,3 +1,4 @@
+import copy
 import os
 import gnupg
 import json
@@ -17,10 +18,26 @@ def configure_iam(account: AccountData):
         warning('No DNS domain configured, skipping certificate management')
 
 
+def effective_roles(config):
+    roles = copy.deepcopy(config.get('roles', {}))
+
+    for additional_policy in config.get('additional_policies', []):
+        role_name = additional_policy['role']
+        role = roles.get(role_name)
+        if role is None or role.get('drop', False):
+            raise ValueError("Found a custom policy for disabled or missing role {}".format(role_name))
+        statement = role.get('policy', {}).get('Statement')
+        if statement is None:
+            raise ValueError("No policy statement found in role {}".format(role_name))
+        statement.append(additional_policy['statement'])
+
+    return roles
+
+
 def configure_iam_policy(account: AccountData):
     iam = account.session.resource('iam')
     sts = account.session.client('sts')
-    roles = account.config.get('roles', {})
+    roles = effective_roles(account.config)
     current_arn = sts.get_caller_identity()['Arn']
 
     info('Account ID is {}'.format(account.id))
