@@ -256,7 +256,8 @@ def create_cf_bastion_host(account: AccountData, vpc: object, region: str, ami_i
         ],
         OnFailure='DELETE',
         Tags=[
-                {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+            {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')},
+            {'Key': 'InfrastructureComponent', 'Value': 'true'}
         ]
     )
     with ActionOnExit('Wait of stack create complete') as act:
@@ -325,7 +326,8 @@ def update_cf_bastion_host(account: AccountData, vpc: object, region: str, stack
             }
         ],
         Tags=[
-            {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
+            {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')},
+            {'Key': 'InfrastructureComponent', 'Value': 'true'}
         ]
     )
     info(response)
