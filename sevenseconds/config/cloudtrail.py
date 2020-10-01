@@ -103,14 +103,7 @@ def configure_cloudtrail(account: object):
                     {
                         'ReadWriteType': 'All',
                         'IncludeManagementEvents': True,
-                        'DataResources': [
-                            {
-                                'Type': 'AWS::Lambda::Function',
-                                'Values': [
-                                    'arn:aws:lambda',
-                                ]
-                            },
-                        ]
+                        'DataResources': [],
                     },
                 ]
             )
