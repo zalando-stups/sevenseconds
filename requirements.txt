@@ -8,6 +8,6 @@ python-gnupg>=0.3.7
 python-dateutil
 datetime
 PyYAML
-PyJWT>=1.4.2
+PyJWT>=2.0, <3.0
 stups-zign>=1.1.26
 setuptools>=30
