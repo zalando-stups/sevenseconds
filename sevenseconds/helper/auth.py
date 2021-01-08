@@ -34,7 +34,7 @@ class OAuthServices:
         self.service_resources = aws_credentials_service_resources
         self.account_list_url = account_list_url
         self.token_managed_id_key = token_managed_id_key
-        self.decoded_token = jwt.decode(self.token, verify=False)
+        self.decoded_token = jwt.decode(token, options={"verify_signature": False})
 
         if self.token_managed_id_key not in self.decoded_token:
             raise ValueError('Invalid token. Please check your ztoken configuration')
