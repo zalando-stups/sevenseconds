@@ -565,65 +565,175 @@ def configure_routing_table(vpc: object, nat_instance_by_az: dict, replace_defau
 
 def create_vpc_endpoints(account: AccountData, vpc: object, region: str):
     ec2c = account.session.client('ec2', region)
-    router_tables = set([rt.id for rt in vpc.route_tables.all()])
     service_names = ec2c.describe_vpc_endpoint_services()['ServiceNames']
 
     for service_name in service_names:
         if service_name.endswith('.s3') or service_name.endswith('.dynamodb'):
-            with ActionOnExit('Checking VPC Endpoint {}..'.format(service_name)) as act:
-                endpoints = ec2c.describe_vpc_endpoints(
-                    Filters=[
-                        {
-                            'Name': 'service-name',
-                            'Values': [
-                                service_name
-                            ]
-                        },
-                        {
-                            'Name': 'vpc-id',
-                            'Values': [
-                                vpc.id
-                            ]
-                        },
-                        {
-                            'Name': 'vpc-endpoint-state',
-                            'Values': [
-                                'pending',
-                                'available'
-                            ]
-                        }
-                    ]
-                )['VpcEndpoints']
-                if endpoints:
-                    for endpoint in endpoints:
-                        rt_in_endpoint = set(endpoint['RouteTableIds'])
-                        if rt_in_endpoint != router_tables:
-                            options = {'VpcEndpointId': endpoint['VpcEndpointId']}
-                            if rt_in_endpoint.difference(router_tables):
-                                options['RemoveRouteTableIds'] = list(rt_in_endpoint.difference(router_tables))
-                            if router_tables.difference(rt_in_endpoint):
-                                options['AddRouteTableIds'] = list(router_tables.difference(rt_in_endpoint))
-                            act.warning('mismatch ({} vs. {}), make update: {}'.format(
-                                rt_in_endpoint,
-                                router_tables,
-                                ec2c.modify_vpc_endpoint(**options))
-                            )
-                else:
-                    options = {
-                        'VpcId': vpc.id,
-                        'ServiceName': service_name,
-                        'RouteTableIds': list(router_tables),
-                        'ClientToken': hashlib.md5(
-                            '{}-{}-{}:{}'.format(
-                                service_name,
-                                region,
-                                vpc.id,
-                                sorted(list(router_tables))
-                            ).encode('utf-8')).hexdigest()
-                    }
-                    act.warning('missing, make create: {}'.format(ec2c.create_vpc_endpoint(**options)))
+            create_gtw_vpc_endpoint(service_name, vpc, ec2c, region)
+        elif service_name.endswith('.kms'):
+            create_interface_vpc_endpoint(service_name, vpc, ec2c, region)
         else:
             info('found new possible service endpoint: {}'.format(service_name))
+
+
+def create_gtw_vpc_endpoint(service_name: str, vpc: object, ec2c: object, region: str):
+    router_tables = set([rt.id for rt in vpc.route_tables.all()])
+    with ActionOnExit('Checking VPC Endpoint {}..'.format(service_name)) as act:
+        endpoints = ec2c.describe_vpc_endpoints(
+            Filters=[
+                {
+                    'Name': 'service-name',
+                    'Values': [
+                        service_name
+                    ]
+                },
+                {
+                    'Name': 'vpc-id',
+                    'Values': [
+                        vpc.id
+                    ]
+                },
+                {
+                    'Name': 'vpc-endpoint-state',
+                    'Values': [
+                        'pending',
+                        'available'
+                    ]
+                }
+            ]
+        )['VpcEndpoints']
+        if endpoints:
+            for endpoint in endpoints:
+                rt_in_endpoint = set(endpoint['RouteTableIds'])
+                if rt_in_endpoint != router_tables:
+                    options = {'VpcEndpointId': endpoint['VpcEndpointId']}
+                    if rt_in_endpoint.difference(router_tables):
+                        options['RemoveRouteTableIds'] = list(rt_in_endpoint.difference(router_tables))
+                    if router_tables.difference(rt_in_endpoint):
+                        options['AddRouteTableIds'] = list(router_tables.difference(rt_in_endpoint))
+                    response = ec2c.modify_vpc_endpoint(**options)
+                    act.warning('mismatch ({} vs. {}), make update: {}'.format(
+                        rt_in_endpoint,
+                        router_tables,
+                        response,
+                    ))
+        else:
+            options = {
+                'VpcId': vpc.id,
+                'ServiceName': service_name,
+                'RouteTableIds': list(router_tables),
+                'ClientToken': hashlib.md5(
+                    '{}-{}-{}:{}'.format(
+                        service_name,
+                        region,
+                        vpc.id,
+                        sorted(list(router_tables))
+                    ).encode('utf-8')).hexdigest()
+            }
+            response = ec2c.create_vpc_endpoint(**options)
+            act.warning('missing, make create: {}'.format(response))
+
+
+def create_interface_vpc_endpoint(service_name: str, vpc: object, ec2c: object, region: str):
+    subnets = set([subnet.id for subnet in filter_subnets(vpc, "internal")])
+    with ActionOnExit('Checking VPC Endpoint {}..'.format(service_name)) as act:
+        sg_name = 'KMS VPC Endpoint'
+        sg_desc = 'Allow access to the KMS VPC endpoint'
+        sg = get_sg(sg_name, sg_desc, vpc.security_groups.all())
+        if not sg:
+            sg = vpc.create_security_group(
+                GroupName=sg_name,
+                Description=sg_desc,
+            )
+            time.sleep(2)
+            sg.create_tags(
+                Tags=[
+                    {'Key': 'Name', 'Value': sg_name},
+                    {'Key': 'InfrastructureComponent', 'Value': 'true'}
+                ])
+            act.warning('missing, make create: {}'.format(sg))
+        if not allow_https_vpc_cidr(sg.ip_permissions, vpc.cidr_block):
+            act.warning(
+                'missing HTTP permission, make authorize: {} port=443 CIDR={}'.format(
+                    sg,
+                    vpc.cidr_block,
+                )
+            )
+            sg.authorize_ingress(
+                IpProtocol='tcp',
+                FromPort=443,
+                ToPort=443,
+                CidrIp=vpc.cidr_block,
+            )
+        endpoints = ec2c.describe_vpc_endpoints(
+            Filters=[
+                {'Name': 'service-name', 'Values': [service_name]},
+                {'Name': 'vpc-id', 'Values': [vpc.id]},
+                {'Name': 'vpc-endpoint-state', 'Values': ['pending', 'available']},
+            ]
+        )['VpcEndpoints']
+        if endpoints:
+            for endpoint in endpoints:
+                sgs_in_endpoint = [group['GroupId'] for group in endpoint['Groups']]
+                if sg.id not in sgs_in_endpoint:
+                    options = {
+                        'VpcEndpointId': endpoint['VpcEndpointId'],
+                        'AddSecurityGroupIds': [sg.id],
+                    }
+                    response = ec2c.modify_vpc_endpoint(**options)
+                    act.warning(
+                        'mismatch ({} not in {}), make update: {}'.format(
+                            sg.id,
+                            sgs_in_endpoint,
+                            response,
+                        )
+                    )
+                if not endpoint['PrivateDnsEnabled']:
+                    options = {
+                        'VpcEndpointId': endpoint['VpcEndpointId'],
+                        'PrivateDnsEnabled': True,
+                    }
+                    response = ec2c.modify_vpc_endpoint(**options)
+                    act.warning(
+                        'mismatch (PrivateDns not enabled), make update: {}'.format(response)
+                    )
+                subnet_in_endpoint = set(endpoint['SubnetIds'])
+                if subnet_in_endpoint != subnets:
+                    options = {'VpcEndpointId': endpoint['VpcEndpointId']}
+                    if subnet_in_endpoint.difference(subnets):
+                        options['RemoveSubnetIds'] = list(
+                            subnet_in_endpoint.difference(subnets)
+                        )
+                    if subnets.difference(subnet_in_endpoint):
+                        options['AddSubnetIds'] = list(
+                            subnets.difference(subnet_in_endpoint)
+                        )
+                    response = ec2c.modify_vpc_endpoint(**options)
+                    act.warning(
+                        'mismatch ({} vs. {}), make update: {}'.format(
+                            subnet_in_endpoint,
+                            subnets,
+                            response,
+                        )
+                    )
+        else:
+            options = {
+                'VpcEndpointType': 'Interface',
+                'VpcId': vpc.id,
+                'ServiceName': service_name,
+                'SubnetIds': list(subnets),
+                'SecurityGroupIds': [sg.id],
+                'PrivateDnsEnabled': True,
+                'ClientToken': hashlib.md5(
+                    '{}-{}-{}:{}'.format(
+                        service_name, region, vpc.id, sorted(list(subnets))
+                    ).encode('utf-8')
+                ).hexdigest(),
+            }
+            response = ec2c.create_vpc_endpoint(**options)
+            act.warning(
+                'missing, make create: {}'.format(response)
+            )
 
 
 def check_vpn_propagation(account: AccountData, vpc: object, region: str):
@@ -781,3 +891,20 @@ def cleanup_vpc(account: AccountData, region: str):
     with ActionOnExit('Delete Elastic IPs..'):
         for eip in ec2c.describe_addresses()['Addresses']:
             ec2c.release_address(AllocationId=eip['AllocationId'])
+
+
+def get_sg(name: str, desc: str, sgs: list) -> object:
+    for sg in sgs:
+        if sg.group_name == name and sg.description == desc:
+            return sg
+
+
+def allow_https_vpc_cidr(permissions: list, vpc_cidr: str) -> bool:
+    for permission in permissions:
+        if (
+            permission['IpProtocol'] == 'tcp'
+            and permission['FromPort'] == 443
+            and permission['ToPort'] == 443
+            and {'CidrIp': vpc_cidr} in permission['IpRanges']
+        ):
+            return True
