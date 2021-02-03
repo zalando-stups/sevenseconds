@@ -14,27 +14,24 @@ def configure_kms_keys(account: object, region):
             continue
         key = json.loads(json.dumps(key_config).replace('{account_id}', account.id))
         with ActionOnExit('Searching for key "{}"..'.format(key_alias)) as act:
-            exist_aliases = kms_client.list_aliases()
-            found = False
-            for alias in exist_aliases['Aliases']:
-                if alias['AliasName'] == key_alias:
-                    found = True
-                    act.ok('key already exists, updating policy')
-                    put_key_response = kms_client.put_key_policy(
-                        KeyId=alias['TargetKeyId'],
-                        PolicyName='default',
-                        Policy=json.dumps(key['key_policy']),
-                        BypassPolicyLockoutSafetyCheck=False
+            try:
+                alias = kms_client.describe_key(KeyId=key_alias)
+                act.ok("key already exists, updating policy")
+                put_key_response = kms_client.put_key_policy(
+                    KeyId=alias["KeyMetadata"]["KeyId"],
+                    PolicyName="default",
+                    Policy=json.dumps(key["key_policy"]),
+                    BypassPolicyLockoutSafetyCheck=False
+                )
+                if put_key_response['ResponseMetadata']['HTTPStatusCode'] != 200:
+                    act.error(
+                        'failed to update key policy for {} response: {}'
+                        .format(key_alias, put_key_response)
                     )
-                    if put_key_response['ResponseMetadata']['HTTPStatusCode'] != 200:
-                        act.error(
-                            'failed to update key policy for {} response: {}'
-                            .format(key_alias, put_key_response)
-                        )
-                        break
-                    act.ok("updated key policy for {}".format(key_alias))
                     break
-            if not found:
+                act.ok("updated key policy for {}".format(key_alias))
+                break
+            except kms_client.exceptions.NotFoundException:
                 create_response = kms_client.create_key(
                     Description=key['description'],
                     KeyUsage=key['key_usage'],
