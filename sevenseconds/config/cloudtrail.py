@@ -13,8 +13,11 @@ def configure_cloudtrail_all_regions(account: object):
     if 'cloudtrail' not in account.config:
         info('Found no Cloudtrail Section in Configfile. Skipping CloudTrail configuration')
         return
-    configure_cloudtrail(account)
-    drop_old_cloudtrails(account)
+
+    enable_cloudtrail = account.config.get("enable_cloudtrail", True)
+    if enable_cloudtrail:
+        configure_cloudtrail(account)
+        drop_old_cloudtrails(account)
 
 
 def drop_old_cloudtrails(account):
