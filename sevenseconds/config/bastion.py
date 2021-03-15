@@ -19,6 +19,7 @@ def configure_bastion_host(account: AccountData, vpc: object, region: str, base_
     cf = account.session.resource('cloudformation', region)
     cfc = account.session.client('cloudformation', region)
 
+    enable_bastion = account.config.get("enable_odd", True)
     re_deploy = account.config['bastion'].get('re_deploy', account.options.get('redeploy_odd_host'))
 
     bastion_version = None
@@ -91,6 +92,10 @@ def configure_bastion_host(account: AccountData, vpc: object, region: str, base_
     ]
     cloudformation_instances = list(vpc.instances.filter(Filters=cloudformation_filter))
     if cloudformation_instances:
+        if not enable_bastion:
+            info('bastion not enabled and instances found. Start clean up')
+            delete_bastion_host(account, region)
+            return
         for instance in cloudformation_instances:
             # Terminate old (stopped) Odd Systems
             if instance.state.get('Name') == 'stopped':
@@ -117,7 +122,7 @@ def configure_bastion_host(account: AccountData, vpc: object, region: str, base_
                     info('check old odd security groups')
                     cleanup_old_security_group(account, region, oddstack, vpc)
 
-    if not legacy_instances and not cloudformation_instances:
+    if not legacy_instances and not cloudformation_instances and enable_bastion:
         try:
             stack = cf.Stack('Odd')
             info('Stack Status: {}'.format(stack.stack_status))
