@@ -788,6 +788,11 @@ def if_vpc_empty(account: AccountData, region: str):
             for gateway in ec2c.describe_nat_gateways()['NatGateways']:
                 if gateway.get('NatGatewayAddresses', {})[0].get('AllocationId') == allocation_id:
                     return True
+
+        # use the SecurityGroup name on the ENI to determine if it's one belonging to the KMS VPC endpoint.
+        sg_name = ','.join([group["GroupName"] for group in ni.get("Groups")])
+        if sg_name == "KMS VPC Endpoint":
+            return True
         return False
 
     account_is_free = True
@@ -869,6 +874,13 @@ def cleanup_vpc(account: AccountData, region: str):
         warning('Nat Gateway is deleting.. waiting..')
         time.sleep(10)
         nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
+
+    with ActionOnExit("Delete Managed Network Interfaces"):
+        for eni in ec2c.describe_network_interfaces(Filters=[{
+            "Name": "group-name",
+            "Values": ["KMS VPC Endpoint"],
+        }])["NetworkInterfaces"]:
+            ec2c.delete_network_interface(NetworkInterfaceId=eni["NetworkInterfaceId"])
 
     with ActionOnExit('Delete Endpoints..'):
         for endpoint in ec2c.describe_vpc_endpoints()['VpcEndpoints']:
