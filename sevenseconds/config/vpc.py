@@ -875,16 +875,13 @@ def cleanup_vpc(account: AccountData, region: str):
         time.sleep(10)
         nat_gateway = ec2c.describe_nat_gateways(Filter=filters)['NatGateways']
 
-    with ActionOnExit("Delete Managed Network Interfaces"):
-        for eni in ec2c.describe_network_interfaces(Filters=[{
-            "Name": "group-name",
-            "Values": ["KMS VPC Endpoint"],
-        }])["NetworkInterfaces"]:
-            ec2c.delete_network_interface(NetworkInterfaceId=eni["NetworkInterfaceId"])
-
     with ActionOnExit('Delete Endpoints..'):
         for endpoint in ec2c.describe_vpc_endpoints()['VpcEndpoints']:
             ec2c.delete_vpc_endpoints(VpcEndpointIds=[endpoint['VpcEndpointId']])
+
+        while len(ec2c.describe_vpc_endpoints()['VpcEndpoints']) > 0:
+            warning('VPC Endpoint is deleting.. waiting..')
+            time.sleep(10)
 
     with ActionOnExit('Delete Subnets..'):
         for subnet in ec2c.describe_subnets()['Subnets']:
