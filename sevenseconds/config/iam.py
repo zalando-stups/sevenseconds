@@ -1,5 +1,7 @@
 import copy
 import os
+
+import botocore.exceptions
 import gnupg
 import json
 import requests
@@ -64,52 +66,51 @@ def configure_iam_policy(account: AccountData):
                             act.error(e)
 
         else:
-            with ActionOnExit('Checking role {role_name}..', **vars()) as act:
-                try:
-                    role = iam.Role(role_name)
-                    policy_document = json.loads(json.dumps(role_cfg.get('policy'))
-                                                 .replace('{account_id}', account.id))
-                    assume_role_policy_document = json.loads(json.dumps(role_cfg.get('assume_role_policy'))
-                                                             .replace('{account_id}', account.id))
-                    if (len(list(role.policies.all())) == 1 and
-                       len(list(role.attached_policies.all())) == 0 and
-                       role.Policy(role_name).policy_document == policy_document and
-                       role.assume_role_policy_document == assume_role_policy_document):
-                        continue
-                    else:
-                        act.error('mismatch')
-                except Exception:
-                    act.error('Failed')
+            role = iam.Role(role_name)
+
+            expected_assume_role_policy_document = json.loads(
+                json.dumps(role_cfg.get('assume_role_policy')).replace('{account_id}', account.id))
 
             try:
-                iam.Role(role_name).arn
-            except Exception:
-                with ActionOnExit('Creating role {role_name}..', **vars()):
-                    assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
-                        '{account_id}',
-                        account.id)
-                    iam.create_role(Path=role_cfg.get('path', '/'),
-                                    RoleName=role_name,
-                                    AssumeRolePolicyDocument=assume_role_policy_document)
+                role.arn
+            except botocore.exceptions.ClientError as e:
+                if e.response["Error"]["Code"] == "NoSuchEntity":
+                    with ActionOnExit('Creating role {role_name}..', **vars()):
+                        iam.create_role(Path=role_cfg.get('path', '/'),
+                                        RoleName=role_name,
+                                        AssumeRolePolicyDocument=json.dumps(expected_assume_role_policy_document))
+                else:
+                    raise
 
-            with ActionOnExit('Updating policy for role {role_name}..', **vars()):
-                policy_document = json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id)
-                iam.RolePolicy(role_name, role_name).put(PolicyDocument=policy_document)
+            expected_policy_document = json.loads(
+                json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id))
+            policies = {p.policy_name: p.policy_document for p in role.policies.all()}
+            expected_policies = {role_name: expected_policy_document}
+            if policies != expected_policies:
+                with ActionOnExit('Updating policy for role {role_name}..', **vars()):
+                    for name, document in expected_policies.items():
+                        iam.RolePolicy(role_name, name).put(PolicyDocument=json.dumps(document))
+                    for policy_name in policies:
+                        if policy_name not in expected_policies:
+                            act.warning('Deleting {} from {}'.format(policy_name, role_name))
+                            iam.RolePolicy(role_name, policy_name).delete()
 
-            with ActionOnExit('Updating assume role policy for role {role_name}..', **vars()):
-                assume_role_policy_document = json.dumps(role_cfg.get('assume_role_policy')).replace(
-                    '{account_id}',
-                    account.id)
-                iam.AssumeRolePolicy(role_name).update(PolicyDocument=assume_role_policy_document)
+            if role.assume_role_policy_document != expected_assume_role_policy_document:
+                with ActionOnExit('Updating assume role policy for role {role_name}..', **vars()):
+                    updated_assume_role_policy_document = json.dumps(expected_assume_role_policy_document)
+                    iam.AssumeRolePolicy(role_name).update(PolicyDocument=updated_assume_role_policy_document)
 
-            with ActionOnExit('Removing invalid policies from role {role_name}..', **vars()) as act:
-                for policy in iam.Role(role_name).policies.all():
-                    if policy.name != role_name:
-                        act.warning('Delete {} from {}'.format(policy.name, role_name))
-                        policy.delete()
-                for policy in iam.Role(role_name).attached_policies.all():
-                    act.warning('Detach {} from {}'.format(policy.policy_name, role_name))
-                    policy.detach_role(RoleName=role_name)
+            attached_policies = set(p.arn for p in role.attached_policies.all())
+            expected_attached_policies = set(policy.replace('{account_id}', account.id)
+                                             for policy in role_cfg.get("attached_policies", []))
+            if attached_policies != expected_attached_policies:
+                with ActionOnExit('Updating attached policies for {role_name}..', **vars()) as act:
+                    for arn in attached_policies - expected_attached_policies:
+                        act.warning('Detaching {} from {}'.format(arn, role_name))
+                        iam.Policy(arn).detach_role(RoleName=role_name)
+                    for arn in expected_attached_policies - attached_policies:
+                        act.warning('Attaching {} to {}'.format(arn, role_name))
+                        iam.Policy(arn).attach_role(RoleName=role_name)
 
 
 def configure_iam_saml(account: AccountData):
