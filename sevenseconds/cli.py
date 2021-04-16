@@ -14,7 +14,7 @@ from .helper.regioninfo import get_regions
 from .config.configure import start_configuration, start_cleanup
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help'])
-SUPPORTED_CONFIG_VERSION = 7
+SUPPORTED_CONFIG_VERSION = 8
 
 
 def print_version(ctx, param, value):
