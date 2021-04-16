@@ -84,10 +84,10 @@ def configure_iam_policy(account: AccountData):
 
             expected_policy_document = json.loads(
                 json.dumps(role_cfg.get('policy')).replace('{account_id}', account.id))
+            expected_policies = {role_name: expected_policy_document} if expected_policy_document else {}
             policies = {p.policy_name: p.policy_document for p in role.policies.all()}
-            expected_policies = {role_name: expected_policy_document}
             if policies != expected_policies:
-                with ActionOnExit('Updating policy for role {role_name}..', **vars()):
+                with ActionOnExit('Updating policy for role {role_name}..', **vars()) as act:
                     for name, document in expected_policies.items():
                         iam.RolePolicy(role_name, name).put(PolicyDocument=json.dumps(document))
                     for policy_name in policies:
