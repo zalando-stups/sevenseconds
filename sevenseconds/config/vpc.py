@@ -520,6 +520,7 @@ def configure_routing_table(vpc: object, nat_instance_by_az: dict, replace_defau
             if get_tag(rt.tags, 'Name', 'undef-rt-name') == get_tag(subnet.tags, 'Name', 'undef-subnet-name'):
                 route_table = rt
                 break
+        destination = None
         if route_via_igw:
             for igw in vpc.internet_gateways.all():
                 destination = {'GatewayId': igw.id}
