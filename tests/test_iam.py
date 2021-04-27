@@ -4,6 +4,9 @@ import sevenseconds.config.iam as iam
 
 SAMPLE_ROLES = {
     "Shibboleth-Administrator": {
+        "attached_policies": [
+            "arn:aws:iam::aws:policy/AdminDefaultPolicy"
+        ],
         "policy": {
             "Statement": [
                 {"Effect": "Allow", "Resource": "Test", "Action": "foo:*"},
@@ -12,6 +15,9 @@ SAMPLE_ROLES = {
         }
     },
     "Shibboleth-PowerUser": {
+        "attached_policies": [
+            "arn:aws:iam::aws:policy/PowerUserDefaultPolicy"
+        ],
         "policy": {
             "Statement": [{"Effect": "Allow", "Resource": "Test", "Action": "baz:*"},]
         }
@@ -29,6 +35,13 @@ SAMPLE_POLICIES = [
     },
 ]
 
+SAMPLE_ATTACHED_POLICIES = [
+    {
+        "role": "Shibboleth-PowerUser",
+        "policies": ["arn:aws:iam::aws:policy/PolicyA", "arn:aws:iam::aws:policy/PolicyB"],
+    }
+]
+
 
 def test_effective_policies_merge():
     config = {
@@ -37,6 +50,9 @@ def test_effective_policies_merge():
     }
     expected = {
         "Shibboleth-Administrator": {
+            "attached_policies": [
+               "arn:aws:iam::aws:policy/AdminDefaultPolicy"
+            ],
             "policy": {
                 "Statement": [
                     {"Effect": "Allow", "Resource": "Test", "Action": "foo:*"},
@@ -47,6 +63,9 @@ def test_effective_policies_merge():
             }
         },
         "Shibboleth-PowerUser": {
+            "attached_policies": [
+               "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
+            ],
             "policy": {
                 "Statement": [
                     {"Effect": "Allow", "Resource": "Test", "Action": "baz:*"},
@@ -59,6 +78,26 @@ def test_effective_policies_merge():
 
     # check that the original config was not affected
     assert 2 == len(config["roles"]["Shibboleth-Administrator"]["policy"]["Statement"])
+
+
+def test_effective_attached_policies_merge():
+    config = {
+        "roles": SAMPLE_ROLES,
+        "additional_attached_policies": SAMPLE_ATTACHED_POLICIES,
+    }
+    expected = {
+        "Shibboleth-Administrator": [
+            "arn:aws:iam::aws:policy/AdminDefaultPolicy",
+        ],
+        "Shibboleth-PowerUser": [
+           "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
+            "arn:aws:iam::aws:policy/PolicyA",
+            "arn:aws:iam::aws:policy/PolicyB"
+        ]
+    }
+
+    for role_name, role_cfg in SAMPLE_ROLES.items():
+        assert expected[role_name] == iam.effective_attached_policies(config, role_name,role_cfg)
 
 
 @pytest.mark.parametrize(

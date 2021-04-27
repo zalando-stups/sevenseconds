@@ -36,6 +36,19 @@ def effective_roles(config):
     return roles
 
 
+def effective_attached_policies(config, role_name, role_cfg):
+    """Merge the attached_policies for a role and
+    additional_attached_policies found in the account config for the
+    given role. Note it might return duplicates."""
+    attached_policies = role_cfg.get("attached_policies", [])
+    additional_attached_policies = []
+    for additional_attached_policy in config.get("additional_attached_policies", []):
+        role = additional_attached_policy["role"]
+        if role == role_name:
+            additional_attached_policies += additional_attached_policy.get("policies", [])
+    return attached_policies + additional_attached_policies
+
+
 def configure_iam_policy(account: AccountData):
     iam = account.session.resource('iam')
     sts = account.session.client('sts')
@@ -100,9 +113,11 @@ def configure_iam_policy(account: AccountData):
                     updated_assume_role_policy_document = json.dumps(expected_assume_role_policy_document)
                     iam.AssumeRolePolicy(role_name).update(PolicyDocument=updated_assume_role_policy_document)
 
+            configured_attached_policies = effective_attached_policies(account.config, role_name, role_cfg)
             attached_policies = set(p.arn for p in role.attached_policies.all())
-            expected_attached_policies = set(policy.replace('{account_id}', account.id)
-                                             for policy in role_cfg.get("attached_policies", []))
+            expected_attached_policies = set(
+                policy.replace("{account_id}", account.id) for policy in configured_attached_policies
+            )
             if attached_policies != expected_attached_policies:
                 with ActionOnExit('Updating attached policies for {role_name}..', **vars()) as act:
                     for arn in attached_policies - expected_attached_policies:
