@@ -19,7 +19,7 @@ def configure_bastion_host(account: AccountData, vpc: object, region: str, base_
     cf = account.session.resource('cloudformation', region)
     cfc = account.session.client('cloudformation', region)
 
-    enable_bastion = account.config.get("enable_odd", True)
+    enable_bastion = account.config.get("enable_odd", False)
     re_deploy = account.config['bastion'].get('re_deploy', account.options.get('redeploy_odd_host'))
 
     bastion_version = None
