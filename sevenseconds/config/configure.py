@@ -118,7 +118,7 @@ def configure_account_region(account: object, region: str, shared_data: SharedDa
     base_images = shared_data.base_images.get(region, {})
     default_base_ami = base_images[account.config['base_ami']['default_channel']]
 
-    configure_log_group(account.session, region)
+    configure_log_group(account.session, region, account.config)
     configure_acm(account, region)
     configure_kms_keys(account, region)
     configure_ebs_encryption(account, region)
