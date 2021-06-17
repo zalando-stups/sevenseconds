@@ -255,6 +255,8 @@ def delete_rds_subnet_group(session: object, region: str):
 def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
     name = '{}-{}'.format(subnet.subnet_type, subnet.availability_zone)
     tags = dict(subnet.tags)
+    custom_name = tags.get('zalando.org/custom-subnet')
+    name = custom_name and '{}-{}-{}'.format(custom_name, subnet.subnet_type, subnet.availability_zone) or name
     tags['Name'] = name
     existing_subnet = find_subnet(vpc, subnet.cidr)
     if not existing_subnet:
@@ -268,7 +270,8 @@ def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
                     {'Name': 'availabilityZone',
                      'Values': [subnet.availability_zone]}
                 ])
-    existing_subnet.create_tags(Tags=[{'Key': k, 'Value': v} for k, v in tags.items()])
+    if not dry_run:
+        existing_subnet.create_tags(Tags=[{'Key': k, 'Value': v} for k, v in tags.items()])
 
 
 def find_subnet(vpc: object, cidr):
