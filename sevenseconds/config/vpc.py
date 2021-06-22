@@ -256,7 +256,7 @@ def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
     name = '{}-{}'.format(subnet.subnet_type, subnet.availability_zone)
     tags = dict(subnet.tags)
     custom_name = tags.get('zalando.org/custom-subnet')
-    name = custom_name and '{}-{}-{}'.format(custom_name, subnet.subnet_type, subnet.availability_zone) or name
+    name = custom_name and '{}-{}-{}'.format(subnet.subnet_type, custom_name, subnet.availability_zone) or name
     tags['Name'] = name
     existing_subnet = find_subnet(vpc, subnet.cidr)
     if not existing_subnet:
