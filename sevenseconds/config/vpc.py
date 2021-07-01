@@ -28,7 +28,8 @@ def configure_vpc(account: AccountData, region, base_ami_id):
         info('Region with non default VPC-Network: {}'.format(vpc_net))
         with ActionOnExit('Finding existing default VPC..'):
             vpc = find_vpc(ec2, VPC_NET)
-        if vpc:
+        # we only need to delete it if we use different settings for the VPC:
+        if vpc and vpc_net != VPC_NET:
             with ActionOnExit('Deleting old default VPC..') as act:
                 delete_vpc(vpc, region)
                 delete_vpc_addresses(account.session, region)
