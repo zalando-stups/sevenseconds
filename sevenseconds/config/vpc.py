@@ -28,7 +28,8 @@ def configure_vpc(account: AccountData, region, base_ami_id):
         info('Region with non default VPC-Network: {}'.format(vpc_net))
         with ActionOnExit('Finding existing default VPC..'):
             vpc = find_vpc(ec2, VPC_NET)
-        if vpc:
+        # we only need to delete it if we use different settings for the VPC:
+        if vpc and vpc_net != VPC_NET:
             with ActionOnExit('Deleting old default VPC..') as act:
                 delete_vpc(vpc, region)
                 delete_vpc_addresses(account.session, region)
@@ -255,6 +256,8 @@ def delete_rds_subnet_group(session: object, region: str):
 def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
     name = '{}-{}'.format(subnet.subnet_type, subnet.availability_zone)
     tags = dict(subnet.tags)
+    custom_name = tags.get('zalando.org/custom-subnet')
+    name = custom_name and '{}-{}-{}'.format(subnet.subnet_type, custom_name, subnet.availability_zone) or name
     tags['Name'] = name
     existing_subnet = find_subnet(vpc, subnet.cidr)
     if not existing_subnet:
@@ -268,7 +271,8 @@ def configure_subnet(vpc, subnet: Subnet, dry_run: bool, waiter):
                     {'Name': 'availabilityZone',
                      'Values': [subnet.availability_zone]}
                 ])
-    existing_subnet.create_tags(Tags=[{'Key': k, 'Value': v} for k, v in tags.items()])
+    if not dry_run:
+        existing_subnet.create_tags(Tags=[{'Key': k, 'Value': v} for k, v in tags.items()])
 
 
 def find_subnet(vpc: object, cidr):
