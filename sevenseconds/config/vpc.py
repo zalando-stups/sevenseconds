@@ -56,12 +56,13 @@ def configure_vpc(account: AccountData, region, base_ami_id):
                     {'Key': 'LastUpdate', 'Value': time.strftime('%Y-%m-%dT%H:%M:%S%z')}
                     ]
             for key, val in account.config.get('vpc', {}).get('tags', {}).items():
-                tags.append({
-                    'Key': key,
-                    'Value': val.replace('{{ami_id}}', base_ami_id).replace(
-                        '{{base_ami_config}}',
-                        json.dumps(account.config.get('base_ami'), sort_keys=True))
-                })
+                if base_ami_id:
+                    tags.append({
+                        'Key': key,
+                        'Value': val.replace('{{ami_id}}', base_ami_id).replace(
+                            '{{base_ami_config}}',
+                            json.dumps(account.config.get('base_ami'), sort_keys=True))
+                    })
             vpc.create_tags(Tags=tags)
             vpc.modify_attribute(EnableDnsSupport={'Value': True})
             vpc.modify_attribute(EnableDnsHostnames={'Value': True})
