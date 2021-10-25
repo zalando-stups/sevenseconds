@@ -2,7 +2,9 @@ version: "2017-09-20"
 pipeline:
   - id: build
     type: script
-    overlay: ci/python
+    overlay: guild-python/latest
+    env:
+      PYENV_VERSION: "3.9"
     commands:
     - desc: "Install dependencies"
       cmd: |
@@ -11,7 +13,7 @@ pipeline:
     - desc: "Run Tests"
       cmd: python3 setup.py test
     - desc: "Check code style"
-      cmd: python3 setup.py flake8
+      cmd: flake8
     - desc: "Build docker image that will upload package"
       cmd: |
         VERSION=$(./next-version)
