@@ -22,6 +22,9 @@ def configure_bastion_host(account: AccountData, vpc: object, region: str, base_
     enable_bastion = account.config.get("enable_odd", False)
     re_deploy = account.config['bastion'].get('re_deploy', account.options.get('redeploy_odd_host'))
 
+    if not base_ami_id:
+        enable_bastion = False
+
     bastion_version = None
     if account.config['bastion'].get('version_url'):
         with ActionOnExit('Get last Tag for Bastion Image...') as act:

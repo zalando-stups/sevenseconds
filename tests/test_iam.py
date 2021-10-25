@@ -4,23 +4,21 @@ import sevenseconds.config.iam as iam
 
 SAMPLE_ROLES = {
     "Shibboleth-Administrator": {
-        "attached_policies": [
-            "arn:aws:iam::aws:policy/AdminDefaultPolicy"
-        ],
+        "attached_policies": ["arn:aws:iam::aws:policy/AdminDefaultPolicy"],
         "policy": {
             "Statement": [
                 {"Effect": "Allow", "Resource": "Test", "Action": "foo:*"},
                 {"Effect": "Deny", "Resource": "Test", "Action": "bar:*"},
             ]
-        }
+        },
     },
     "Shibboleth-PowerUser": {
-        "attached_policies": [
-            "arn:aws:iam::aws:policy/PowerUserDefaultPolicy"
-        ],
+        "attached_policies": ["arn:aws:iam::aws:policy/PowerUserDefaultPolicy"],
         "policy": {
-            "Statement": [{"Effect": "Allow", "Resource": "Test", "Action": "baz:*"},]
-        }
+            "Statement": [
+                {"Effect": "Allow", "Resource": "Test", "Action": "baz:*"},
+            ]
+        },
     },
 }
 
@@ -50,9 +48,7 @@ def test_effective_policies_merge():
     }
     expected = {
         "Shibboleth-Administrator": {
-            "attached_policies": [
-               "arn:aws:iam::aws:policy/AdminDefaultPolicy"
-            ],
+            "attached_policies": ["arn:aws:iam::aws:policy/AdminDefaultPolicy"],
             "policy": {
                 "Statement": [
                     {"Effect": "Allow", "Resource": "Test", "Action": "foo:*"},
@@ -60,17 +56,17 @@ def test_effective_policies_merge():
                     {"Effect": "Allow", "Resource": "Additional", "Action": "test:*"},
                     {"Effect": "Deny", "Resource": "Additional", "Action": "abc:*"},
                 ]
-            }
+            },
         },
         "Shibboleth-PowerUser": {
             "attached_policies": [
-               "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
+                "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
             ],
             "policy": {
                 "Statement": [
                     {"Effect": "Allow", "Resource": "Test", "Action": "baz:*"},
                 ]
-            }
+            },
         },
     }
 
@@ -90,14 +86,14 @@ def test_effective_attached_policies_merge():
             "arn:aws:iam::aws:policy/AdminDefaultPolicy",
         ],
         "Shibboleth-PowerUser": [
-           "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
+            "arn:aws:iam::aws:policy/PowerUserDefaultPolicy",
             "arn:aws:iam::aws:policy/PolicyA",
-            "arn:aws:iam::aws:policy/PolicyB"
-        ]
+            "arn:aws:iam::aws:policy/PolicyB",
+        ],
     }
 
     for role_name, role_cfg in SAMPLE_ROLES.items():
-        assert expected[role_name] == iam.effective_attached_policies(config, role_name,role_cfg)
+        assert expected[role_name] == iam.effective_attached_policies(config, role_name, role_cfg)
 
 
 @pytest.mark.parametrize(
